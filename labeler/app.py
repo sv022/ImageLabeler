@@ -17,6 +17,7 @@ class ImageLabelerApp:
         self.INFO_WIDTH = 410
 
         self.folder = ""
+        self.selected_index = None
 
         # Создание фрейма-контейнера для прокрутки
         self.gallery_container = tk.Frame(self.root, width=self.GALLERY_WIDTH, height=self.GALLERY_HEIGHT)
@@ -47,12 +48,15 @@ class ImageLabelerApp:
         self.info_frame = tk.Frame(self.root, height=self.INFO_HEIGHT, width=self.INFO_WIDTH, background=colors['gray'])
         self.info_frame.place(x=1020, y=10)
 
+        self.info_label = tk.Label(self.info_frame, text="Выберите папку", font=("Arial", 12), background=colors['gray'])
+        self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
+
         self.select_folder_button = tk.Button(self.gallery_container, text="Select Folder", width=10, command=self.select_folder)
         self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
         
 
     def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")  
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
 
     def select_folder(self):
@@ -61,13 +65,33 @@ class ImageLabelerApp:
             return
         self.folder = folder_path
         self.select_folder_button.place_forget()
+        self.info_label.config(text="Выберите изображение")
         self.load_images(folder_path)
+
+    
+    def select_image(self, index):
+        # self.info_label.config(text=index)
+        image_path = self.image_files[index]
+        self.selected_index = index
+
+        IMG_height = self.INFO_WIDTH - 20
+        IMG_width = IMG_height
+
+        image = Image.open(image_path)
+        image = image.resize((IMG_width, IMG_height))
+        photo = ImageTk.PhotoImage(image)
+
+        self.info_label.place_forget()
+        self.info_label = tk.Label(self.info_frame, image=photo, background=colors['gray'])
+        self.info_label.place(x=10, y=10)
+
+        self.info_label.config(image=photo)
+        self.info_label.image = photo
 
     
     def load_images(self, folder_path):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
         self.image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
-        self.image_labels = []
 
         IMG_height = 85
         IMG_width = 85
@@ -79,8 +103,6 @@ class ImageLabelerApp:
             image = Image.open(image)
             image = image.resize((IMG_width, IMG_height))
             photo = ImageTk.PhotoImage(image)
-            
-            self.image_labels.append(tk.Label(self.gallery_frame, image=photo))
 
             # place_x_coord = ((idx % img_per_row) * IMG_height + pad_x * (idx % img_per_row + 1))
             # place_y_coord = (idx // img_per_row * IMG_width) + pad_y * (idx // img_per_row + 1)
@@ -88,6 +110,7 @@ class ImageLabelerApp:
 
             label = tk.Label(self.gallery_frame, image=photo)
             label.image = photo
+            label.bind("<Button-1>", lambda event, idx=idx: self.select_image(idx))
             label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
         
         self.gallery_frame.update_idletasks()
