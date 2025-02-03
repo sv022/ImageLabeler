@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, Canvas
 from PIL import Image, ImageTk
 from .utils.colors import colors
+import json
 
 class ImageLabelerApp:
     def __init__(self, root):
@@ -18,6 +19,9 @@ class ImageLabelerApp:
 
         self.folder = ""
         self.selected_index = None
+        with open('classes.txt') as f:
+            self.classes = f.read().splitlines()
+        self.labeled_files = {}
 
         # Создание фрейма-контейнера для прокрутки
         self.gallery_container = tk.Frame(self.root, width=self.GALLERY_WIDTH, height=self.GALLERY_HEIGHT)
@@ -87,7 +91,11 @@ class ImageLabelerApp:
 
         self.info_label.config(image=photo)
         self.info_label.image = photo
-
+        
+        tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_height + 20)
+        self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
+        self.classes_select.place(x=10, y=IMG_height + 60, width=self.INFO_WIDTH - 20)
+        self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
     
     def load_images(self, folder_path):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
@@ -115,3 +123,19 @@ class ImageLabelerApp:
         
         self.gallery_frame.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+
+    def save_label(self, event):
+        if self.selected_index is None:
+            return
+        label = self.classes_select.get()
+        if not label:
+            return
+        labeled_file = self.image_files[self.selected_index].split("\\")[-1]
+        self.labeled_files[labeled_file] = label
+        try:
+            with open(f'{self.folder}/labels.json', 'w', encoding='utf-8') as file:
+                json.dump(self.labeled_files, file, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Ошибка при записи в файл: {e}")
+        
