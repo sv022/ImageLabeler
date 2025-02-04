@@ -177,7 +177,7 @@ class ImageLabelerApp:
         if class_number is None:
             return
         image_name = os.path.basename(self.image_files[self.selected_index])
-        self.labeled_files[image_name] = class_number
+        self.labeled_files[image_name] = str(class_number)
         self.save_labels()
 
     def save_labels(self):
