@@ -1,6 +1,6 @@
 import os
 import tkinter as tk
-from tkinter import ttk, filedialog, Canvas, simpledialog, messagebox
+from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
 from .utils.colors import colors
 import json
@@ -19,6 +19,7 @@ class ImageLabelerApp:
 
         self.folder = ""
         self.selected_index = None
+        self.image_files = []
         self.labeled_files = {}
 
         # UI Layout
@@ -44,14 +45,28 @@ class ImageLabelerApp:
         self.info_label = tk.Label(self.info_frame, text="Выберите папку", font=("Arial", 12), background=colors['gray'])
         self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
 
-        self.select_folder_button = tk.Button(self.gallery_container, text="Select Folder", width=10, command=self.select_folder)
+        self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", width=10, command=self.select_folder)
         self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
 
-        self.save_button = tk.Button(self.info_frame, text="Сохранить", command=self.save_labels, state=tk.DISABLED)
-        self.save_button.place(x=10, y=self.INFO_HEIGHT - 50, width=self.INFO_WIDTH - 20)
+        self.initToolbar()
+
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    
+    def initToolbar(self):
+        menubar = Menu(self.root)
+        self.root.config(menu=menubar)
+
+        fileMenu = Menu(menubar)
+        fileMenu.add_command(label="Открыть папку", underline=0, command=self.select_folder)
+        menubar.add_cascade(label="Файл", underline=0, menu=fileMenu)
+
+        classMenu = Menu(menubar)
+        classMenu.add_command(label="Изменить классы", underline=0, command=self.create_class_config)
+        classMenu.add_command(label="Очистить классы", underline=0, command=self.clear_classes)
+        menubar.add_cascade(label="Настройка классов", underline=0, menu=classMenu)
 
     def select_folder(self):
         folder_path = filedialog.askdirectory()
@@ -60,6 +75,9 @@ class ImageLabelerApp:
         self.folder = folder_path
         self.select_folder_button.place_forget()
         self.config_path = os.path.join(self.folder, "config.json")
+
+        self.selected_index = None
+        self.image_files = []
         
         if os.path.exists(self.config_path):
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -67,15 +85,16 @@ class ImageLabelerApp:
                 self.class_to_index = {str(name): i for i, name in enumerate(self.classes)}
                 self.index_to_class = {i: str(name) for i, name in enumerate(self.classes)}
         else:
-            self.create_class_config(self.config_path)
+            self.classes = []
+    
         self.info_label.config(text="Выберите изображение")
         self.load_images(folder_path)
         self.load_existing_labels()
 
-    def create_class_config(self, config_path):
+    def create_class_config(self):
         self.class_window = tk.Toplevel(self.root)
         self.class_window.title("Настройка классов")
-        self.class_window.geometry("400x300")
+        self.class_window.geometry("400x300+300+200")
         
         self.class_entries = []
         self.class_frame = tk.Frame(self.class_window)
@@ -111,14 +130,24 @@ class ImageLabelerApp:
             # self.setup_ui()
             self.load_images(self.folder)
 
+
+    def clear_classes(self):
+        self.classes = []
+        self.index_to_class = {}
+        self.class_to_index = {}
+
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(self.index_to_class, f, ensure_ascii=False, indent=4)
+
+
     def load_existing_labels(self):
         labels_path = os.path.join(self.folder, "labels.json")
-        if os.path.exists(labels_path):
-            try:
-                with open(labels_path, "r", encoding="utf-8") as file:
-                    self.labeled_files = json.load(file)
-            except Exception as e:
-                print(f"Ошибка загрузки labels.json: {e}")
+        if not os.path.exists(labels_path): return
+        try:
+            with open(labels_path, "r", encoding="utf-8") as file:
+                self.labeled_files = json.load(file)
+        except Exception as e:
+            print(f"Ошибка загрузки labels.json: {e}")
 
     def select_image(self, index):
         image_path = self.image_files[index]
@@ -136,10 +165,19 @@ class ImageLabelerApp:
         self.info_label.config(image=photo)
         self.info_label.image = photo
 
+        if not self.classes:
+            tk.Label(self.info_frame, text="Не настроены классы для разметки", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 20)
+            try:
+                self.classes_select.place_forget()
+            except Exception:
+                pass
+            return
+        
         tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 20)
         self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
         self.classes_select.place(x=10, y=IMG_size + 60, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
+            
 
         image_name = os.path.basename(image_path)
         if image_name in self.labeled_files:
@@ -167,7 +205,7 @@ class ImageLabelerApp:
 
         self.gallery_frame.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        self.save_button.config(state=tk.NORMAL)
+
 
     def save_label(self, event):
         if self.selected_index is None:
