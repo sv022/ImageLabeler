@@ -59,6 +59,11 @@ class ImageLabelerApp:
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     
+    def restart_programm():
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
+    
     def initToolbar(self):
         menubar = Menu(self.root)
         self.root.config(menu=menubar)
@@ -143,6 +148,8 @@ class ImageLabelerApp:
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.index_to_class, f, ensure_ascii=False, indent=4)
 
+        self.restart_programm()
+        
 
     def load_existing_labels(self):
         labels_path = os.path.join(self.folder, "labels.json")
