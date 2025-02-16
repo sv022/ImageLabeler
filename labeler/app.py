@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
 
+from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors
 import json
@@ -41,7 +42,7 @@ class ImageLabelerApp:
 
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind_all("<MouseWheel>", self.__on_mousewheel)
 
         self.info_frame = tk.Frame(self.root, height=self.INFO_HEIGHT, width=self.INFO_WIDTH, background=colors['gray'])
         self.info_frame.place(x=1020, y=10)
@@ -55,15 +56,27 @@ class ImageLabelerApp:
         self.initToolbar()
 
 
-    def _on_mousewheel(self, event):
+    def __on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     
-    def restart_programm():
+    def __restart_programm():
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
     
+    def __clear_info_frame(self):
+        try:
+            self.classes_select.place_forget()
+        except Exception:
+            pass
+        try:
+            for widget in self.gallery_frame.winfo_children():
+                widget.destroy()
+        except Exception:
+            pass
+
+
     def initToolbar(self):
         menubar = Menu(self.root)
         self.root.config(menu=menubar)
@@ -77,6 +90,10 @@ class ImageLabelerApp:
         classMenu.add_command(label="Очистить классы", underline=0, command=self.clear_classes)
         menubar.add_cascade(label="Настройка классов", underline=0, menu=classMenu)
 
+        exportMenu = Menu(menubar)
+        exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
+        menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
+
     def select_folder(self):
         folder_path = filedialog.askdirectory()
         if not folder_path:
@@ -87,7 +104,8 @@ class ImageLabelerApp:
 
         self.selected_index = None
         self.image_files = []
-        
+        self.__clear_info_frame()
+
         if os.path.exists(self.config_path):
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self.classes = list(json.load(f).keys())
@@ -100,6 +118,7 @@ class ImageLabelerApp:
         self.load_images(folder_path)
         self.load_existing_labels()
 
+        
     def create_class_config(self):
         self.class_window = tk.Toplevel(self.root)
         self.class_window.title("Настройка классов")
@@ -148,7 +167,7 @@ class ImageLabelerApp:
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.index_to_class, f, ensure_ascii=False, indent=4)
 
-        self.restart_programm()
+        self.__restart_programm()
         
 
     def load_existing_labels(self):
@@ -161,6 +180,17 @@ class ImageLabelerApp:
             print(f"Ошибка загрузки labels.json: {e}")
 
     def select_image(self, index):
+        try:
+            self.classes_not_set_label.place_forget()
+        except Exception:
+            pass
+        try:
+            self.crop_save_copy_check.place_forget()
+            self.crop_image_button.place_forget()
+            self.classes_select_label.place_forget()
+            self.classes_select.place_forget()
+        except Exception:
+            pass
         image_path = self.image_files[index]
         self.selected_index = index
 
@@ -177,17 +207,21 @@ class ImageLabelerApp:
         self.info_label.image = photo
 
         if not self.classes:
-            tk.Label(self.info_frame, text="Не настроены классы для разметки", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 20)
+            self.classes_not_set_label = tk.Label(self.info_frame, text="Не настроены классы для разметки", font=("Arial", 12), background=colors['gray'])
+            self.classes_not_set_label.place(x=10, y=IMG_size + 20)
             try:
                 self.classes_select.place_forget()
             except Exception:
                 pass
             return
         
-        tk.Button(self.info_frame, text="Обрезать Изображение", font=("Arial", 12), command=self.crop_image, background=colors['gray']).place(x=10, y=IMG_size + 20)
-        tk.Checkbutton(self.info_frame, text="Сохранить копию", font=("Arial", 12), variable=self.save_copy_check, onvalue=True, offvalue=False, background=colors['gray']).place(x=10, y=IMG_size + 60)
+        self.crop_image_button = tk.Button(self.info_frame, text="Обрезать Изображение", font=("Arial", 12), command=self.crop_image, background=colors['gray'])
+        self.crop_image_button.place(x=10, y=IMG_size + 20)
+        self.crop_save_copy_check = tk.Checkbutton(self.info_frame, text="Сохранить копию", font=("Arial", 12), variable=self.save_copy_check, onvalue=True, offvalue=False, background=colors['gray'])
+        self.crop_save_copy_check.place(x=10, y=IMG_size + 60)
         
-        tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 100)
+        self.classes_select_label = tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray'])
+        self.classes_select_label.place(x=10, y=IMG_size + 100)
         self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
         self.classes_select.place(x=10, y=IMG_size + 130, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
@@ -260,3 +294,14 @@ class ImageLabelerApp:
 
         cropper_window.protocol("WM_DELETE_WINDOW", on_cropper_close)
         cropper.run()
+
+
+    def export_to_txt(self):
+        if not self.folder:
+            return
+        
+        scaler_window = tk.Toplevel(self.root)
+        scaler_window.geometry("300x200")
+        scaler_window.resizable(False, False)
+        scaler = ImageScaler(scaler_window, self.folder)
+        scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
