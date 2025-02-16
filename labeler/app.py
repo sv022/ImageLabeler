@@ -1,7 +1,10 @@
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
+
+from .utils.cropper import ImageCropper
 from .utils.colors import colors
 import json
 
@@ -21,6 +24,7 @@ class ImageLabelerApp:
         self.selected_index = None
         self.image_files = []
         self.labeled_files = {}
+        self.save_copy_check = tk.BooleanVar(value=True)
 
         # UI Layout
         self.gallery_container = tk.Frame(self.root, width=self.GALLERY_WIDTH, height=self.GALLERY_HEIGHT)
@@ -173,9 +177,12 @@ class ImageLabelerApp:
                 pass
             return
         
-        tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 20)
+        tk.Button(self.info_frame, text="Обрезать Изображение", font=("Arial", 12), command=self.crop_image, background=colors['gray']).place(x=10, y=IMG_size + 20)
+        tk.Checkbutton(self.info_frame, text="Сохранить копию", font=("Arial", 12), variable=self.save_copy_check, onvalue=True, offvalue=False, background=colors['gray']).place(x=10, y=IMG_size + 60)
+        
+        tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray']).place(x=10, y=IMG_size + 100)
         self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
-        self.classes_select.place(x=10, y=IMG_size + 60, width=self.INFO_WIDTH - 20)
+        self.classes_select.place(x=10, y=IMG_size + 130, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
             
 
@@ -228,3 +235,21 @@ class ImageLabelerApp:
             print(f"Labels saved successfully to {labels_path}")
         except Exception as e:
             print(f"Ошибка при записи в файл: {e}")
+
+
+    def crop_image(self):
+        if self.selected_index is None:
+            return
+        
+        cropper_window = tk.Toplevel(self.root)
+        
+        image_path = self.image_files[self.selected_index]
+        cropper = ImageCropper(cropper_window)
+        cropper.set_file(image_path)
+        cropper.set_save_copy(self.save_copy_check.get())
+        def on_cropper_close():
+            self.load_images(self.folder)
+            cropper_window.destroy()
+
+        cropper_window.protocol("WM_DELETE_WINDOW", on_cropper_close)
+        cropper.run()

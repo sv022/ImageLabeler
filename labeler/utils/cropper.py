@@ -12,8 +12,8 @@ import tkinter as Tkinter
 
 class ImageCropper:
 
-    def __init__(self):
-        self.root = root = Tkinter.Tk()
+    def __init__(self, root):
+        self.root = root
         self.root.bind("<Button-1>", self.__on_mouse_down)
         self.root.bind("<ButtonRelease-1>", self.__on_mouse_release)
         self.root.bind("<B1-Motion>", self.__on_mouse_move)
@@ -26,6 +26,7 @@ class ImageCropper:
         self.rectangle = None
         self.canvas_image = None
         self.canvas_message = None
+        self.save_copy = True
         self.files = []
         self.box = [0, 0, 0, 0]
         self.ratio = 1.0
@@ -82,7 +83,9 @@ class ImageCropper:
             return True
 
         self.filename = filename
-        self.outputname = filename[:filename.rfind('.')] + '_cropped'
+        self.outputname = filename[:filename.rfind('.')]
+        if self.save_copy:
+            self.outputname += '_cropped'
         try:
             self.img = Image.open(filename)
         except IOError:
@@ -113,6 +116,9 @@ class ImageCropper:
         self.root.update()
 
         return True
+    
+    def set_save_copy(self, save_copy : bool):
+        self.save_copy = save_copy
 
     def __on_mouse_down(self, event):
         self.box[0], self.box[1] = event.x, event.y
@@ -153,7 +159,7 @@ class ImageCropper:
         self.__refresh_rectangle()
 
     def __on_key_down(self, event):
-        print( event.char )
+        # print( event.char )
         if event.char == ' ':
             self.__crop_image()
             self.roll_image()
@@ -196,15 +202,15 @@ class ImageCropper:
 
 
 # cropper = ImageCropper()
-# # if os.path.isdir(sys.argv[1]):
-# #     cropper.set_directory(sys.argv[1])
-# # elif os.path.isfile(sys.argv[1]):
-# #     cropper.set_file(sys.argv[1])
-# # else:
-# #     # print( sys.argv[1] + ' is not a file or directory' )
-# #     sys.exit()
-# # if len(sys.argv) > 2:
-# #     cropper.set_ratio(float(sys.argv[2]))
+# if os.path.isdir(sys.argv[1]):
+#     cropper.set_directory(sys.argv[1])
+# elif os.path.isfile(sys.argv[1]):
+#     cropper.set_file(sys.argv[1])
+# else:
+#     # print( sys.argv[1] + ' is not a file or directory' )
+#     sys.exit()
+# if len(sys.argv) > 2:
+#     cropper.set_ratio(float(sys.argv[2]))
 
 # cropper.set_file(r"C:\Users\.HTML\Desktop\Images\zhsch\pu1.jpg")
 # cropper.run()
