@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
@@ -7,7 +8,7 @@ from PIL import Image, ImageTk
 from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors
-import json
+from .utils.data_analysis import plot_from_labels, plot_from_file
 
 class ImageLabelerApp:
     def __init__(self, root):
@@ -93,6 +94,11 @@ class ImageLabelerApp:
         exportMenu = Menu(menubar)
         exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
         menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
+
+        anasysisMenu = Menu(menubar)
+        anasysisMenu.add_command(label="Текущая директория", underline=0, command=self.plot_current_labels)
+        anasysisMenu.add_command(label="Выбрать файл", underline=0, command=self.plot_selected_file)
+        menubar.add_cascade(label="Анализ", underline=0, menu=anasysisMenu)
 
     def select_folder(self):
         folder_path = filedialog.askdirectory()
@@ -305,3 +311,15 @@ class ImageLabelerApp:
         scaler_window.resizable(False, False)
         scaler = ImageScaler(scaler_window, self.folder)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
+
+    
+    def plot_current_labels(self):
+        plot_from_labels(self.folder)
+
+
+    def plot_selected_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if not file_path:
+            return
+
+        plot_from_file(file_path)
