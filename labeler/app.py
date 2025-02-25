@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import ctypes
 import tkinter as tk
 from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
@@ -16,7 +17,10 @@ class ImageLabelerApp:
         self.root.title("Image Labeler")
         self.root.geometry('1440x900+300+200')
         self.root.resizable(False, False)
-
+        self.__appid = 'svapp.imagelabeler.v1' # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(self.__appid)
+        self.root.iconbitmap(r"labeler/icon.ico")
+        
         self.GALLERY_HEIGHT = 880
         self.GALLERY_WIDTH = 1000
         self.INFO_HEIGHT = 880
@@ -51,7 +55,7 @@ class ImageLabelerApp:
         self.info_label = tk.Label(self.info_frame, text="Выберите папку", font=("Arial", 12), background=colors['gray'])
         self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
 
-        self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", width=10, command=self.select_folder)
+        self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", width=15, command=self.select_folder)
         self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
 
         self.initToolbar()
@@ -61,7 +65,7 @@ class ImageLabelerApp:
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     
-    def __restart_programm():
+    def __restart_programm(self):
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
@@ -119,28 +123,42 @@ class ImageLabelerApp:
                 self.index_to_class = {i: str(name) for i, name in enumerate(self.classes)}
         else:
             self.classes = []
-    
+
+        self.labeled_files = {}
         self.info_label.config(text="Выберите изображение")
         self.load_images(folder_path)
         self.load_existing_labels()
 
         
     def create_class_config(self):
+        if not self.folder:
+            tk.messagebox.showerror("Ошибка", "Папка не выбрана")
+            return
         self.class_window = tk.Toplevel(self.root)
         self.class_window.title("Настройка классов")
-        self.class_window.geometry("400x300+300+200")
+        self.class_window.geometry("400x500+300+200")
+
         
         self.class_entries = []
         self.class_frame = tk.Frame(self.class_window)
         self.class_frame.pack(pady=10)
+
+        for class_name in self.classes:
+            entry = tk.Entry(self.class_frame)
+            entry.insert(0, class_name)
+            entry.pack(pady=2)
+            self.class_entries.append(entry)
         
         self.add_class_field()
         
         add_button = tk.Button(self.class_window, text="+", command=self.add_class_field)
         add_button.pack(pady=5)
+
+        hint_text = tk.Label(self.class_window, text="Чтобы удалить класс, оставьте поле пустым", font=("Arial", 8), foreground="gray")
+        hint_text.pack(pady=10)
         
         save_button = tk.Button(self.class_window, text="Сохранить", command=lambda: self.save_classes())
-        save_button.pack(pady=10)
+        save_button.pack(pady=5)
 
     def add_class_field(self):
         entry = tk.Entry(self.class_frame)
@@ -166,6 +184,9 @@ class ImageLabelerApp:
 
 
     def clear_classes(self):
+        if not self.folder:
+            tk.messagebox.showerror("Ошибка", "Папка не выбрана")
+            return
         self.classes = []
         self.index_to_class = {}
         self.class_to_index = {}
