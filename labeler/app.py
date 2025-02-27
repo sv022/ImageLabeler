@@ -207,6 +207,7 @@ class ImageLabelerApp:
             print(f"Ошибка загрузки labels.json: {e}")
 
     def select_image(self, index):
+        # clearing UI elements
         try:
             self.classes_not_set_label.place_forget()
         except Exception:
@@ -218,6 +219,7 @@ class ImageLabelerApp:
             self.classes_select.place_forget()
         except Exception:
             pass
+
         image_path = self.image_files[index]
         self.selected_index = index
 
@@ -257,7 +259,7 @@ class ImageLabelerApp:
         image_name = os.path.basename(image_path)
         if image_name in self.labeled_files:
             class_number = self.labeled_files[image_name]
-            self.classes_select.set(self.index_to_class.get(class_number, ""))
+            self.classes_select.set(self.index_to_class.get(int(class_number), ""))
 
     def load_images(self, folder_path):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
