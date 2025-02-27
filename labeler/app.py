@@ -320,8 +320,9 @@ class ImageLabelerApp:
             cropper_window.destroy()
 
         cropper_window.protocol("WM_DELETE_WINDOW", on_cropper_close)
-        cropper.run()
 
+        if not cropper.run():
+            tk.messagebox.showerror("Ошибка", "Размер изображения слишком мал")
 
     def export_to_txt(self):
         if not self.folder:

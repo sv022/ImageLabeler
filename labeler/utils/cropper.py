@@ -34,19 +34,6 @@ class ImageCropper:
                              highlightthickness = 0,
                              bd = 0)
 
-    def get_image_exif(self, image):
-        if image is None:
-            img_exif = None
-        info = image._getexif()
-        if info is not None:
-            img_exif = {}
-            for tag, value in info.items():
-                decoded = TAGS.get(tag, tag)
-                img_exif[decoded] = value
-            return img_exif
-        else:
-            return None
-
     def set_file(self, filename):
         self.files = []
         self.files.append(filename)
@@ -68,14 +55,13 @@ class ImageCropper:
         while len(self.files) > 0 and self.set_image(self.files.pop(0)) == False:
             pass
 
-    def rotate(self, image, exif):
-        if exif is None:
-            return image
-        if exif['Orientation'] == 6:
-            return image.rotate(-90)
-
     def set_ratio(self, ratio):
         self.ratio = float(ratio)
+
+    def check_valid_size(self):
+        if self.img.size[0] < 120 and self.img.size[1] < 120:
+            return False
+        return True
 
     def set_image(self, filename):
 
@@ -91,10 +77,7 @@ class ImageCropper:
         except IOError:
             print( 'Ignore: ' + filename + ' cannot be opened as an image')
             return False
-
-        exif = self.get_image_exif(self.img)
-        self.img = self.rotate(self.img, exif)
-        ratio = float(self.img.size[1]) / self.img.size[0]
+        # ratio = float(self.img.size[1]) / self.img.size[0]
         if self.img.size[0] > 1200:
             self.scale = self.img.size[0] / 1200
             self.resized_img = self.img.resize( (int(self.img.size[0] / self.scale),
@@ -196,9 +179,13 @@ class ImageCropper:
         self.canvas.delete(self.rectangle)
         self.rectangle = self.canvas.create_rectangle(self.box[0], self.box[1], self.box[2], self.box[3])
 
-    def run(self):
+    def run(self) -> bool:
         self.roll_image()
+        if not self.check_valid_size():
+            self.root.destroy()
+            return False
         self.root.mainloop()
+        return True
 
 
 # cropper = ImageCropper()
