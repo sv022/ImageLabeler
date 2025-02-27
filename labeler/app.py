@@ -5,10 +5,12 @@ import ctypes
 import tkinter as tk
 from tkinter import ttk, filedialog, Canvas, Menu
 from PIL import Image, ImageTk
+from random import choice
+from string import hexdigits
 
 from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
-from .utils.colors import colors
+from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_file
 
 class ImageLabelerApp:
@@ -30,6 +32,10 @@ class ImageLabelerApp:
         self.selected_index = None
         self.image_files = []
         self.labeled_files = {}
+        self.classes = []
+        self.class_to_index = {}
+        self.index_to_class = {}
+        self.class_color_map = {}
         self.save_copy_check = tk.BooleanVar(value=True)
 
         # UI Layout
@@ -82,6 +88,15 @@ class ImageLabelerApp:
             pass
 
 
+    def __get_image_bg_color(self, image_name : str):
+        image_bg_color = "#FFFFFF"
+        try:
+            image_bg_color = self.class_color_map[self.index_to_class[int(self.labeled_files[image_name])]]
+        except KeyError:
+            pass
+        return image_bg_color
+
+
     def initToolbar(self):
         menubar = Menu(self.root)
         self.root.config(menu=menubar)
@@ -116,18 +131,22 @@ class ImageLabelerApp:
         self.image_files = []
         self.__clear_info_frame()
 
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                self.classes = list(json.load(f).keys())
-                self.class_to_index = {str(name): i for i, name in enumerate(self.classes)}
-                self.index_to_class = {i: str(name) for i, name in enumerate(self.classes)}
-        else:
-            self.classes = []
-
+        self.load_class_config()
         self.labeled_files = {}
         self.info_label.config(text="Выберите изображение")
-        self.load_images(folder_path)
         self.load_existing_labels()
+        self.load_images(folder_path)
+
+    def load_class_config(self):
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                self.classes = list(config.keys())
+                self.class_to_index = {str(name): i for i, name in enumerate(self.classes)}
+                self.index_to_class = {i: str(name) for i, name in enumerate(self.classes)}
+                self.class_color_map = {name : config[name]['color'] for name in config}
+        else:
+            self.classes = []
 
         
     def create_class_config(self):
@@ -146,6 +165,7 @@ class ImageLabelerApp:
         for class_name in self.classes:
             entry = tk.Entry(self.class_frame)
             entry.insert(0, class_name)
+            entry.configure({"background" : self.class_color_map[class_name]})
             entry.pack(pady=2)
             self.class_entries.append(entry)
         
@@ -156,9 +176,10 @@ class ImageLabelerApp:
 
         hint_text = tk.Label(self.class_window, text="Чтобы удалить класс, оставьте поле пустым", font=("Arial", 8), foreground="gray")
         hint_text.pack(pady=10)
-        
         save_button = tk.Button(self.class_window, text="Сохранить", command=lambda: self.save_classes())
         save_button.pack(pady=5)
+        hint_text2 = tk.Label(self.class_window, text="Для применения изменений программа перезапустится", font=("Arial", 8), foreground="#FAA0A0")
+        hint_text2.pack(pady=5)
 
     def add_class_field(self):
         entry = tk.Entry(self.class_frame)
@@ -169,8 +190,21 @@ class ImageLabelerApp:
         class_mapping = {}
         for i, entry in enumerate(self.class_entries):
             class_name = entry.get().strip()
-            if class_name:
-                class_mapping[class_name] = str(i)
+            if not class_name:
+                continue
+            
+            class_color = self.class_color_map.get(class_name, None)
+            if class_color is not None:
+                self.class_color_map[class_name] = class_color
+            elif len(self.class_color_map) < 30:
+                class_color = choice(list(set(list(random_colors)) - set(list(self.class_color_map.values()))))
+            else:
+                class_color = f'#{"".join(choice(hexdigits).lower() for _ in range(6))}'
+
+            class_mapping[class_name] = {
+                "index": i,
+                "color": class_color
+            }
         
         if class_mapping:
             self.classes = list(class_mapping.keys())
@@ -181,6 +215,8 @@ class ImageLabelerApp:
             self.class_window.destroy()
             # self.setup_ui()
             self.load_images(self.folder)
+        
+        self.__restart_programm()
 
 
     def clear_classes(self):
@@ -190,6 +226,7 @@ class ImageLabelerApp:
         self.classes = []
         self.index_to_class = {}
         self.class_to_index = {}
+        self.class_color_map = {}
 
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.index_to_class, f, ensure_ascii=False, indent=4)
@@ -270,13 +307,16 @@ class ImageLabelerApp:
         pad_y = 5
         img_per_row = 10
 
-        for idx, image in enumerate(self.image_files):
-            image = Image.open(image)
+        for idx, image_name in enumerate(self.image_files):
+            image = Image.open(image_name)
             image = image.resize((IMG_size, IMG_size))
             photo = ImageTk.PhotoImage(image)
 
             label = tk.Label(self.gallery_frame, image=photo)
             label.image = photo
+            base_image_name = os.path.basename(image_name)
+            image_bg_color = self.__get_image_bg_color(base_image_name)
+            label.configure({"background" : image_bg_color})
             label.bind("<Button-1>", lambda event, idx=idx: self.select_image(idx))
             label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
 
@@ -293,6 +333,8 @@ class ImageLabelerApp:
             return
         image_name = os.path.basename(self.image_files[self.selected_index])
         self.labeled_files[image_name] = str(class_number)
+        image_bg_color = self.__get_image_bg_color(image_name)
+        list(self.gallery_frame.children.values())[self.selected_index].configure({"background" : image_bg_color})
         self.save_labels()
 
     def save_labels(self):
@@ -302,7 +344,7 @@ class ImageLabelerApp:
         try:
             with open(labels_path, "w", encoding="utf-8") as file:
                 json.dump(self.labeled_files, file, ensure_ascii=False, indent=4)
-            print(f"Labels saved successfully to {labels_path}")
+            # print(f"Labels saved successfully to {labels_path}")
         except Exception as e:
             print(f"Ошибка при записи в файл: {e}")
 
