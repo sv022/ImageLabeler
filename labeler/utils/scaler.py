@@ -66,11 +66,9 @@ class Scaler:
             print(f"Warning: File {e} not labeled.")
             return
 
-        # Создаём строку для CSV
         flattened_values = normalized_image.flatten()
         csv_line = f"{labelName}," + ",".join(map(str, flattened_values))
         
-        # Записываем в CSV файл
         with open(self.outputPath, "a") as output_file:
             output_file.write(csv_line + '\n')
 
@@ -149,10 +147,10 @@ class ImageScaler:
         if not folder_path:
             return
         if not os.path.isdir(folder_path):
-            self.error_label.config(text="Selected path is not a folder.")
+            self.error_label.config(text="Неверный путь.")
             return
         if not os.path.isfile(os.path.join(folder_path, "labels.json")):
-            self.error_label.config(text="Selected folder does not contain labels.json.")
+            self.error_label.config(text="Выбранная папка не содержит файл labels.json.")
             return
         self.folder_label.config(text=folder_path)
         self.folder = folder_path
@@ -196,8 +194,6 @@ class ImageScaler:
 
 
     def process_folder(self):
-
-
         if self.export_format == "txt":
             self.process_folder_txt()
         elif self.export_format == "csv":
@@ -212,11 +208,16 @@ class ImageScaler:
         
         self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get())))
 
-        if self.export_format == "txt":
-            self.sc.process_folder_txt(self.folder)
-        elif self.export_format == "csv":
-            self.sc.process_folder_csv(self.folder)
-        else:
+        try:
+            if self.export_format == "txt":
+                self.sc.process_folder_txt(self.folder)
+            elif self.export_format == "csv":
+                self.sc.process_folder_csv(self.folder)
+            else:
+                return
+        except Exception as e:
+            self.error_label.config(text=f"Произошла ошибка: {str(e)}")
+            self.error_label.config(foreground="red")
             return
 
         self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в out/output.{self.export_format}")
