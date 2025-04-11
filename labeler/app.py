@@ -112,6 +112,7 @@ class ImageLabelerApp:
 
         exportMenu = Menu(menubar)
         exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
+        exportMenu.add_command(label="Экспорт папки в csv", underline=0, command=self.export_to_csv)
         menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
 
         anasysisMenu = Menu(menubar)
@@ -375,7 +376,17 @@ class ImageLabelerApp:
         scaler_window = tk.Toplevel(self.root)
         scaler_window.geometry("300x200")
         scaler_window.resizable(False, False)
-        scaler = ImageScaler(scaler_window, self.folder)
+        scaler = ImageScaler(scaler_window, "txt", self.folder)
+        scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
+
+    def export_to_csv(self):
+        if not self.folder:
+            return
+        
+        scaler_window = tk.Toplevel(self.root)
+        scaler_window.geometry("300x200")
+        scaler_window.resizable(False, False)
+        scaler = ImageScaler(scaler_window, "csv", self.folder)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
     

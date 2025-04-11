@@ -3,12 +3,14 @@ from tkinter import Label, Button, filedialog, Frame, Entry
 import cv2
 import json
 from numpy import around
+from datetime import datetime
 
 
 class Scaler:
     def __init__(self, outDir = 'out/'):
         self.resolution = (64, 64)
         self.outDir = outDir
+        self.outputPath = ""
         self.labelMap = {}
         self.labels = []
 
@@ -25,7 +27,7 @@ class Scaler:
         self.resolution = resolution
 
     
-    def process_image(self, image_path : str):
+    def process_image_txt(self, image_path : str):
         image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         
         if image is None:
@@ -41,32 +43,84 @@ class Scaler:
             print(f"Warning: File {e} not labeled.")
             return
 
-        with open(f"{self.outDir}output.txt", "a") as output_file:
+        with open(self.outputPath, "a") as output_file:
             flattened_values = normalized_image.flatten()
             output_file.write(" ".join(map(str, flattened_values)) + '\n')
             output_file.write(" ".join(["1" if str(l) == str(labelName) else "0" for l in self.labels]) + '\n')
 
         # print(f"Значения для {image_name} записаны в {self.outDir}")
 
+    def process_image_csv(self, image_path: str):
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        
+        if image is None:
+            raise FileNotFoundError(f"Unable to load image: {image_path}.")
 
-    def process_folder(self, input_folder : str):
+        resized_image = cv2.resize(image, self.resolution)
+        normalized_image = around(resized_image / 255.0, decimals=3)
+        image_name = "".join(os.path.splitext(os.path.basename(image_path)))
+
+        try:
+            labelName = self.labelMap[image_name]
+        except KeyError as e:
+            print(f"Warning: File {e} not labeled.")
+            return
+
+        # Создаём строку для CSV
+        flattened_values = normalized_image.flatten()
+        csv_line = f"{labelName}," + ",".join(map(str, flattened_values))
+        
+        # Записываем в CSV файл
+        with open(self.outputPath, "a") as output_file:
+            output_file.write(csv_line + '\n')
+
+        # print(f"Значения для {image_name} записаны в {self.outDir}")
+
+
+    def process_folder_txt(self, input_folder : str):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
 
         if os.listdir(input_folder) == []:
             return
         
-        if not os.path.isfile(os.path.join(self.outDir, "output.txt")):
-            with open(f"{self.outDir}output.txt", "w") as output_file:
+        now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
+        txt_path = os.path.join(self.outDir, f"output_{now}.txt")
+        self.outputPath = txt_path
+        if not os.path.isfile(txt_path):
+            with open(txt_path, "w") as output_file:
                 output_file.write("")
 
         for file_name in os.listdir(input_folder):
             if file_name.lower().endswith(supported_formats):
                 image_path = os.path.join(input_folder, file_name)
-                self.process_image(image_path)
+                self.process_image_txt(image_path)
+
+    def process_folder_csv(self, input_folder: str):
+        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
+
+        if not os.path.exists(input_folder) or not os.listdir(input_folder):
+            return
+        
+        now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
+        csv_path = os.path.join(self.outDir, f"output_{now}.csv")
+        self.outputPath = csv_path
+        if not os.path.isfile(csv_path):
+            with open(csv_path, "w") as output_file:
+                width, height = self.resolution
+                header = "label," + ",".join(f"{i}" for i in range(1, width * height + 1))
+                output_file.write(header + '\n')
+
+        for file_name in os.listdir(input_folder):
+            if file_name.lower().endswith(supported_formats):
+                image_path = os.path.join(input_folder, file_name)
+                try:
+                    self.process_image_csv(image_path)
+                except Exception as e:
+                    print(f"Error processing {file_name}: {str(e)}")
 
 
 class ImageScaler:
-    def __init__(self, root, folderPath = ""):
+    def __init__(self, root, exportFormat : str, folderPath = "", ):
         self.root = root
         self.folder_label = Label(root)
         self.folder_label.pack(pady=10)
@@ -77,8 +131,14 @@ class ImageScaler:
 
         self.folder = folderPath
 
+        if exportFormat not in {"txt", "csv"}:
+            self.export_format = "txt"
+        else:
+            self.export_format = exportFormat
+
+
         if folderPath == "":
-            select_folder_button = Button(root, text="Select Folder", command=self.select_folder)
+            select_folder_button = Button(root, text="Выбрать папку", command=self.select_folder)
             select_folder_button.pack(pady=10)
         else:
             self.initUI()
@@ -104,6 +164,7 @@ class ImageScaler:
             with open(f"{self.folder}/labels.json", 'r', encoding='utf-8') as file:
                 self.sc.set_label_map(json.load(file))
         except Exception as e:
+            print(self.folder)
             self.error_label.config(text=f"Выбранная папка не содержит файл labels.json")
             self.error_label.config(foreground="red")
             return
@@ -134,6 +195,14 @@ class ImageScaler:
         self.process_button.pack(pady=10)
 
 
+    def process_folder(self):
+
+
+        if self.export_format == "txt":
+            self.process_folder_txt()
+        elif self.export_format == "csv":
+            self.process_folder_csv()
+
 
     def process_folder(self):
         if self.width_entry.get() == "" or self.height_entry.get() == "":
@@ -142,7 +211,13 @@ class ImageScaler:
             return
         
         self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get())))
-        self.sc.process_folder(self.folder)
 
-        self.error_label.config(text="Папка успешно обработана.\nРезультаты сохранены в out/output.txt")
+        if self.export_format == "txt":
+            self.sc.process_folder_txt(self.folder)
+        elif self.export_format == "csv":
+            self.sc.process_folder_csv(self.folder)
+        else:
+            return
+
+        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в out/output.{self.export_format}")
         self.error_label.config(foreground="green")
