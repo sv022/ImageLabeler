@@ -11,7 +11,7 @@ from string import hexdigits
 from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
-from .utils.data_analysis import plot_from_labels, plot_from_file
+from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
 
 class ImageLabelerApp:
@@ -160,8 +160,10 @@ class ImageLabelerApp:
 
         anasysisMenu = Menu(menubar)
         anasysisMenu.add_command(label="Текущая директория", underline=0, command=self.plot_current_labels)
-        anasysisMenu.add_command(label="Выбрать файл", underline=0, command=self.plot_selected_file)
+        anasysisMenu.add_command(label="Выбрать файл txt", underline=0, command=self.plot_selected_txt)
+        anasysisMenu.add_command(label="Выбрать файл csv", underline=0, command=self.plot_selected_csv)
         menubar.add_cascade(label="Анализ", underline=0, menu=anasysisMenu)
+
 
     def select_folder(self):
         folder_path = filedialog.askdirectory()
@@ -233,6 +235,7 @@ class ImageLabelerApp:
 
         entries = {}
 
+
         def add_field_with_browse(row, label_text, field_name, is_folder=True):
             ttk.Label(form_frame, text=label_text).grid(row=row, column=0, sticky=tk.W, pady=5)
             
@@ -262,6 +265,7 @@ class ImageLabelerApp:
         add_field_with_browse(2, "Файл меток:", "labels", is_folder=False)
         add_field_with_browse(3, "Конфигурация классов:", "config", is_folder=False)
         add_field_with_browse(4, "Папка изображений:", "images", is_folder=True)
+
 
         def save_config():
             try:
@@ -303,6 +307,7 @@ class ImageLabelerApp:
                 json.dump(self.project, f, ensure_ascii=False, indent=4)
         except Exception as e:
             messagebox.showerror("Ошибка!", repr(e))
+
 
     def load_class_config(self):
         if os.path.exists(self.config_path):
@@ -348,10 +353,12 @@ class ImageLabelerApp:
         hint_text2 = tk.Label(self.class_window, text="Для применения изменений программа перезапустится", font=("Arial", 8), foreground="#FAA0A0")
         hint_text2.pack(pady=5)
 
+
     def add_class_field(self):
         entry = tk.Entry(self.class_frame)
         entry.pack(pady=2)
         self.class_entries.append(entry)
+
 
     def save_classes(self):
         class_mapping = {}
@@ -413,8 +420,8 @@ class ImageLabelerApp:
         except Exception as e:
             print(f"Ошибка загрузки labels.json: {e}")
 
+
     def select_image(self, index):
-        # clearing UI elements
         try:
             self.classes_not_set_label.place_forget()
         except Exception:
@@ -468,6 +475,7 @@ class ImageLabelerApp:
             class_number = self.labeled_files[image_name]
             self.classes_select.set(self.index_to_class.get(int(class_number), ""))
 
+
     def load_images(self, folder_path):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
         self.image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
@@ -507,6 +515,7 @@ class ImageLabelerApp:
         list(self.gallery_frame.children.values())[self.selected_index].configure({"background" : image_bg_color})
         self.save_labels()
 
+
     def save_labels(self):
         if not self.folder:
             return
@@ -541,6 +550,7 @@ class ImageLabelerApp:
         if not cropper.run():
             tk.messagebox.showerror("Ошибка", "Размер изображения слишком мал")
 
+
     def export_to_txt(self):
         if not self.folder:
             return
@@ -550,6 +560,7 @@ class ImageLabelerApp:
         scaler_window.resizable(False, False)
         scaler = ImageScaler(scaler_window, "txt", self.folder)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
+
 
     def export_to_csv(self):
         if not self.folder:
@@ -563,15 +574,26 @@ class ImageLabelerApp:
 
     
     def plot_current_labels(self):
-        plot_from_labels(self.folder)
+        if self.project:
+            plot_from_labels(self.project["labels"])
+            return
+        plot_from_labels(os.path.join(self.folder, "labels.json"))
 
 
-    def plot_selected_file(self):
+    def plot_selected_txt(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if not file_path:
             return
 
         plot_from_file(file_path)
+
+
+    def plot_selected_csv(self):
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not file_path:
+            return
+
+        plot_from_csv(file_path)
 
     
     def parse_mnist(self, kind : str):
