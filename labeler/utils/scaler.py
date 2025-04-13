@@ -9,13 +9,13 @@ from datetime import datetime
 class Scaler:
     def __init__(self, outDir = 'out/'):
         self.resolution = (64, 64)
-        self.outDir = outDir
+        self.outDir = os.path.join(outDir, 'output')
         self.outputPath = ""
         self.labelMap = {}
         self.labels = []
 
-        if not os.path.exists(outDir):
-            os.makedirs(outDir)
+        if not os.path.exists(self.outDir):
+            os.makedirs(self.outDir)
 
     
     def set_label_map(self, labelMap):
@@ -125,7 +125,7 @@ class ImageScaler:
         self.error_label = Label(root, foreground="red")
         self.error_label.pack(pady=10)
 
-        self.sc = Scaler()
+        self.sc = Scaler(outDir=folderPath)
 
         self.folder = folderPath
 
@@ -220,5 +220,5 @@ class ImageScaler:
             self.error_label.config(foreground="red")
             return
 
-        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в out/output.{self.export_format}")
+        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в output/output.{self.export_format}")
         self.error_label.config(foreground="green")
