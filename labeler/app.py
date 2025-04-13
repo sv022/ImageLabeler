@@ -12,6 +12,7 @@ from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_file
+from .utils.mnist_loader import load_mnist
 
 class ImageLabelerApp:
     def __init__(self, root):
@@ -573,9 +574,69 @@ class ImageLabelerApp:
         plot_from_file(file_path)
 
     
-    def parse_mnist_digits(self):
-        pass
+    def parse_mnist(self, kind : str):
+        if not self.folder:
+            return
+        digits_loader_window = tk.Toplevel(self.root)
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        digits_loader_window.geometry(f"400x300+{x+250}+{y+200}")
+        digits_loader_window.resizable(False, False)
+        digits_loader_window.title(f"Загрузка MNIST {kind}")
 
+        tk.Label(digits_loader_window, text="").pack(pady=10, padx=20)
+
+        entry_frame = tk.Frame(digits_loader_window)
+        entry_frame.pack()
+
+        train_data_size_label = tk.Label(entry_frame, text="Размер тренировочной выборки:")
+        train_data_size_entry = tk.Entry(entry_frame)
+        train_data_size_entry.insert(0, "60000")
+        train_data_size_label.grid(row=1, column=0, pady=10, padx=20, sticky="e")
+        train_data_size_entry.grid(row=1, column=1, pady=10, padx=5, sticky="w")
+
+        test_data_size_label = tk.Label(entry_frame, text="Размер тестовой выборки:")
+        test_data_size_entry = tk.Entry(entry_frame)
+        test_data_size_entry.insert(0, "10000")
+        test_data_size_label.grid(row=2, column=0, pady=10, padx=20, sticky="e")
+        test_data_size_entry.grid(row=2, column=1, pady=10, padx=5, sticky="w")
+
+        status_label = tk.Label(digits_loader_window, text="")
+        status_label.pack(pady=10, padx=20)
+
+        def _load_digits():
+            train_data_size = int(train_data_size_entry.get())
+            test_data_size = int(test_data_size_entry.get())
+            output_folder = os.path.join(self.folder, "mnist")
+            try:
+                if not os.path.exists(output_folder):
+                    os.mkdir(output_folder)
+                load_mnist(output_folder, kind, train_data_size, test_data_size)
+            except Exception as e:
+                status_label.config(text="Ошибка при загрузке")
+                status_label.config(fg="red")
+                print(e)
+                return
+    
+        def load_digits():
+            status_label.config(text="Загрузка...")
+            status_label.config(fg="grey")
+            digits_loader_window.update_idletasks()
+
+            _load_digits()
+
+            status_label.config(text="Загрузка завершена")
+            status_label.config(fg="green")
+            
+        
+        load_digits_btn = tk.Button(digits_loader_window, text="Загрузить", width=20, command=load_digits)
+        load_digits_btn.pack(pady=40, padx=20)
+        
+        digits_loader_window.protocol("WM_DELETE_WINDOW", digits_loader_window.destroy)
+
+
+    def parse_mnist_digits(self):
+        self.parse_mnist("digits")
 
     def parse_mnist_fashion(self):
-        pass
+        self.parse_mnist("fashion")
