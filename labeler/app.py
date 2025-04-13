@@ -3,7 +3,7 @@ import sys
 import json
 import ctypes
 import tkinter as tk
-from tkinter import ttk, filedialog, Canvas, Menu
+from tkinter import ttk, filedialog, Canvas, Menu, messagebox
 from PIL import Image, ImageTk
 from random import choice
 from string import hexdigits
@@ -29,6 +29,7 @@ class ImageLabelerApp:
         self.INFO_WIDTH = 410
 
         self.folder = ""
+        self.project = None
         self.selected_index = None
         self.image_files = []
         self.labeled_files = {}
@@ -62,7 +63,13 @@ class ImageLabelerApp:
         self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
 
         self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", width=15, command=self.select_folder)
-        self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
+        self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 100)
+
+        self.open_project_button = tk.Button(self.gallery_container, text="Открыть проект", width=15, command=self.open_project)
+        self.open_project_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
+
+        self.create_project_button = tk.Button(self.gallery_container, text="Создать проект", width=15, command=self.create_project)
+        self.create_project_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2)
 
         self.initToolbar()
 
@@ -87,6 +94,31 @@ class ImageLabelerApp:
         except Exception:
             pass
 
+    
+    def __reload_app_state(self, place_forget=False, dump_project_data=False):
+        if place_forget:
+            self.select_folder_button.place_forget()
+            self.create_project_button.place_forget()
+            self.open_project_button.place_forget()
+
+        if dump_project_data and self.project:
+            if not os.path.exists(self.project["config"]):
+                with open(self.project["config"], "w", encoding="utf-8") as f:
+                    json.dump({}, f, ensure_ascii=False, indent=4)
+            if not os.path.exists(self.project["labels"]):
+                with open(self.project["labels"], "w", encoding="utf-8") as f:
+                    json.dump({}, f, ensure_ascii=False, indent=4)
+
+        self.selected_index = None
+        self.image_files = []
+        self.__clear_info_frame()
+
+        self.load_class_config()
+        self.labeled_files = {}
+        self.info_label.config(text="Выберите изображение")
+        self.load_existing_labels()
+        self.load_images(self.folder)
+
 
     def __get_image_bg_color(self, image_name : str):
         image_bg_color = "#FFFFFF"
@@ -105,6 +137,11 @@ class ImageLabelerApp:
         fileMenu.add_command(label="Открыть папку", underline=0, command=self.select_folder)
         menubar.add_cascade(label="Файл", underline=0, menu=fileMenu)
 
+        projectMenu = Menu(menubar)
+        projectMenu.add_command(label="Открыть проект", underline=0, command=self.open_project)
+        projectMenu.add_command(label="Настройки проекта", underline=0, command=self.configure_project)
+        menubar.add_cascade(label="Проект", underline=0, menu=projectMenu)
+
         classMenu = Menu(menubar)
         classMenu.add_command(label="Изменить классы", underline=0, command=self.create_class_config)
         classMenu.add_command(label="Очистить классы", underline=0, command=self.clear_classes)
@@ -114,6 +151,11 @@ class ImageLabelerApp:
         exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
         exportMenu.add_command(label="Экспорт папки в csv", underline=0, command=self.export_to_csv)
         menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
+
+        premadeDatasetMenu = Menu(menubar)
+        premadeDatasetMenu.add_command(label="MNIST Digits", underline=0, command=self.parse_mnist_digits)
+        premadeDatasetMenu.add_command(label="MNIST Fashion", underline=0, command=self.parse_mnist_fashion)
+        menubar.add_cascade(label="Готовые датасеты", underline=0, menu=premadeDatasetMenu)
 
         anasysisMenu = Menu(menubar)
         anasysisMenu.add_command(label="Текущая директория", underline=0, command=self.plot_current_labels)
@@ -125,18 +167,141 @@ class ImageLabelerApp:
         if not folder_path:
             return
         self.folder = folder_path
-        self.select_folder_button.place_forget()
         self.config_path = os.path.join(self.folder, "config.json")
 
-        self.selected_index = None
-        self.image_files = []
-        self.__clear_info_frame()
+        self.project = None
+        
+        self.__reload_app_state(place_forget=True)
 
-        self.load_class_config()
-        self.labeled_files = {}
-        self.info_label.config(text="Выберите изображение")
-        self.load_existing_labels()
-        self.load_images(folder_path)
+
+    def open_project(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Labeler Projects", "*.labelproj.json")])
+        if not file_path:
+            return
+        try:
+            with open(file_path) as f:
+                project_data = json.load(f)
+                self.project = project_data
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при открытии проекта: {e}")
+            return
+        
+        self.folder = self.project["images"]
+        self.config_path = self.project["config"]
+
+        self.__reload_app_state(place_forget=True)
+        
+
+    def create_project(self):
+        folder_path = filedialog.askdirectory()
+        if not folder_path:
+            return
+        
+        project_data = {
+            "name": os.path.basename(folder_path).replace(" ", "_"),
+            "root": folder_path,
+            "labels": os.path.join(folder_path, "labels.json"),
+            "config": os.path.join(folder_path, "config.json"),
+            "images": os.path.join(folder_path, "images")
+        }
+        
+        if not os.path.exists(project_data["images"]):
+            os.mkdir(project_data["images"])
+
+        self.project = project_data
+        self._update_project_data()
+
+        self.folder = self.project["images"]
+        self.config_path = self.project["config"]
+
+        self.__reload_app_state(place_forget=True, dump_project_data=True)
+
+    
+    def configure_project(self):
+        if not self.project:
+            return
+
+        config_window = tk.Toplevel(self.root)
+        config_window.title(f"Настройка проекта: {self.project['name']}")
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        config_window.geometry(f"600x400+{x+200}+{y+250}")
+
+        form_frame = ttk.Frame(config_window, padding="10")
+        form_frame.pack(fill=tk.BOTH, expand=True)
+
+        entries = {}
+
+        def add_field_with_browse(row, label_text, field_name, is_folder=True):
+            ttk.Label(form_frame, text=label_text).grid(row=row, column=0, sticky=tk.W, pady=5)
+            
+            entry = ttk.Entry(form_frame, width=50)
+            entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+            entry.insert(0, self.project.get(field_name, ""))
+            entries[field_name] = entry
+            if field_name == "name":
+                entry.config(state="readonly")
+            
+            def browse():
+                if is_folder:
+                    path = filedialog.askdirectory()
+                else:
+                    path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+                if path:
+                    entry.delete(0, tk.END)
+                    entry.insert(0, path)
+                
+                config_window.focus_set()
+            
+            browse_btn = ttk.Button(form_frame, text="Обзор...", command=browse)
+            browse_btn.grid(row=row, column=2, padx=5)
+
+        add_field_with_browse(0, "Название проекта:", "name", is_folder=False)
+        add_field_with_browse(1, "Корневая папка:", "root", is_folder=True)
+        add_field_with_browse(2, "Файл меток:", "labels", is_folder=False)
+        add_field_with_browse(3, "Конфигурация классов:", "config", is_folder=False)
+        add_field_with_browse(4, "Папка изображений:", "images", is_folder=True)
+
+        def save_config():
+            try:
+                for field_name, entry in entries.items():
+                    self.project[field_name] = entry.get()
+
+                self._update_project_data()
+
+                config_window.destroy()
+                
+                self.folder = self.project["images"]
+                self.config_path = self.project["config"]
+
+
+                self.__reload_app_state(place_forget=True, dump_project_data=True)
+                    
+            except Exception as e:
+                tk.messagebox.showerror("Ошибка", f"Не удалось сохранить настройки:\n{str(e)}")
+
+        button_frame = ttk.Frame(config_window)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        save_btn = ttk.Button(button_frame, text="Сохранить", command=save_config)
+        save_btn.pack(side=tk.RIGHT, padx=5)
+
+        cancel_btn = ttk.Button(button_frame, text="Отмена", command=config_window.destroy)
+        cancel_btn.pack(side=tk.RIGHT, padx=5)
+        form_frame.columnconfigure(1, weight=1)
+
+        config_window.protocol("WM_DELETE_WINDOW", config_window.destroy)
+
+
+    def _update_project_data(self):
+        if not self.project:
+            return
+
+        try:
+            with open(os.path.join(self.project["root"], f"{self.project['name']}.labelproj.json"), 'w', encoding='utf-8') as f:
+                json.dump(self.project, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            messagebox.showerror("Ошибка!", repr(e))
 
     def load_class_config(self):
         if os.path.exists(self.config_path):
@@ -236,7 +401,10 @@ class ImageLabelerApp:
         
 
     def load_existing_labels(self):
-        labels_path = os.path.join(self.folder, "labels.json")
+        if not self.project: 
+            labels_path = os.path.join(self.folder, "labels.json")
+        else:
+            labels_path = self.project["labels"]
         if not os.path.exists(labels_path): return
         try:
             with open(labels_path, "r", encoding="utf-8") as file:
@@ -341,7 +509,10 @@ class ImageLabelerApp:
     def save_labels(self):
         if not self.folder:
             return
-        labels_path = os.path.join(self.folder, "labels.json")
+        if not self.project: 
+            labels_path = os.path.join(self.folder, "labels.json")
+        else:
+            labels_path = self.project["labels"]
         try:
             with open(labels_path, "w", encoding="utf-8") as file:
                 json.dump(self.labeled_files, file, ensure_ascii=False, indent=4)
@@ -400,3 +571,11 @@ class ImageLabelerApp:
             return
 
         plot_from_file(file_path)
+
+    
+    def parse_mnist_digits(self):
+        pass
+
+
+    def parse_mnist_fashion(self):
+        pass
