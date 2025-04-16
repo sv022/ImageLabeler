@@ -29,8 +29,18 @@ idx_dt = {
     0x0e : 'd', # float64
 }
 
-def random_sample(arr: np.array, size: int = 1) -> np.array:
-    return arr[np.random.choice(len(arr), size=size, replace=False)]
+def random_sample(data_train: np.array, labels_test : np.array, size: int = 1) -> tuple[list, list]:
+
+    data_train_norm = [[np.around(int(x) / 255, decimals=2) for x in sample.flatten()] for sample in data_train]
+
+    res_train = []
+    res_test = []
+
+    for i in range(size):
+        index = np.random.randint(0, len(data_train_norm))
+        res_train.append(data_train_norm[index])
+        res_test.append(labels_test[index])
+    return res_train, res_test
 
 def download_mnist_file(fname, target_dir, force=False, kind='digits'):
     target_fname = os.path.join(target_dir, fname)
@@ -103,11 +113,8 @@ def load_mnist(outDir: str, kind : str, train_size=60000, test_size=10000):
 
     Xtest, ytest = mnist.test_images(), mnist.test_labels()
 
-    Xtrain, ytrain = random_sample(Xtrain, size=train_size), random_sample(ytrain, size=train_size).tolist()
-    Xtest, ytest = random_sample(Xtest, size=test_size), random_sample(ytest, size=test_size).tolist()
-
-    Xtrain = [[np.around(int(x) / 255, decimals=2) for x in sample.flatten()] for sample in Xtrain]
-    Xtest = [[np.around(int(x) / 255, decimals=2) for x in sample.flatten()] for sample in Xtest]
+    Xtrain, ytrain = random_sample(Xtrain, ytrain, size=train_size)
+    Xtest, ytest = random_sample(Xtest, ytest, size=test_size)
 
     # print(len(Xtrain), len(ytrain), len(Xtest), len(ytest))
     # print(type(Xtrain), type(ytrain), type(Xtest), type(ytest))
