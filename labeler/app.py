@@ -84,16 +84,35 @@ class ImageLabelerApp:
         os.execl(python, python, *sys.argv)
 
     
-    def __clear_info_frame(self):
+    def __clear_info_frame(self, clear_gallery=True):
+        try:
+            self.crop_save_copy_check.place_forget()
+            self.crop_image_button.place_forget()
+            self.classes_select_label.place_forget()
+            self.classes_select.place_forget()
+            self.image_info_label.place_forget()
+            self.image_name_label.place_forget()
+            self.image_extension_label.place_forget()
+            self.image_size_label.place_forget()
+        except Exception:
+            pass
+        else:
+            try:
+                self.info_label.place_forget()
+                self.info_label = tk.Label(self.info_frame, text="Выберите изображение", font=("Arial", 12), background=colors['gray'])
+                self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
+            except:
+                pass
         try:
             self.classes_select.place_forget()
         except Exception:
             pass
-        try:
-            for widget in self.gallery_frame.winfo_children():
-                widget.destroy()
-        except Exception:
-            pass
+        if clear_gallery:
+            try:
+                for widget in self.gallery_frame.winfo_children():
+                    widget.destroy()
+            except Exception:
+                pass
 
     
     def __reload_app_state(self, place_forget=False, dump_project_data=False):
@@ -175,7 +194,6 @@ class ImageLabelerApp:
         self.project = None
         
         self.__reload_app_state(place_forget=True)
-
 
     def open_project(self):
         file_path = filedialog.askopenfilename(filetypes=[("Labeler Projects", "*.labelproj.json")])
@@ -426,20 +444,19 @@ class ImageLabelerApp:
             self.classes_not_set_label.place_forget()
         except Exception:
             pass
-        try:
-            self.crop_save_copy_check.place_forget()
-            self.crop_image_button.place_forget()
-            self.classes_select_label.place_forget()
-            self.classes_select.place_forget()
-        except Exception:
-            pass
 
+        self.__clear_info_frame(clear_gallery=False)
+        
         image_path = self.image_files[index]
         self.selected_index = index
 
         IMG_size = self.INFO_WIDTH - 20
 
         image = Image.open(image_path)
+
+        image_name, image_extension = os.path.basename(self.image_files[self.selected_index]).split('.')
+        im_width, im_height = image.size
+
         image = image.resize((IMG_size, IMG_size))
         photo = ImageTk.PhotoImage(image)
 
@@ -468,7 +485,17 @@ class ImageLabelerApp:
         self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
         self.classes_select.place(x=10, y=IMG_size + 130, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
-            
+
+        self.image_info_label = tk.Label(self.info_frame, text="Информация об изображении", font=("Arial", 12), background=colors['gray'])
+        self.image_info_label.place(x=10, y=IMG_size + 170)
+
+        self.image_name_label = tk.Label(self.info_frame, text=f"Название файла: {image_name}", font=("Arial", 10), background=colors['gray'])
+        self.image_extension_label = tk.Label(self.info_frame, text=f"Расширение: {image_extension}", font=("Arial", 10), background=colors['gray'])
+        self.image_size_label = tk.Label(self.info_frame, text=f"Размер изображения: {im_width}x{im_height}", font=("Arial", 10), background=colors['gray'])
+
+        self.image_name_label.place(x=10, y=IMG_size + 210)
+        self.image_extension_label.place(x=10, y=IMG_size + 240)
+        self.image_size_label.place(x=10, y=IMG_size + 270)
 
         image_name = os.path.basename(image_path)
         if image_name in self.labeled_files:
