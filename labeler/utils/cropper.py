@@ -1,13 +1,6 @@
-########################
-# Author: Lixing Dong
-# License: GPL
-########################
-
 from PIL import Image, ImageTk
-from PIL.ExifTags import TAGS
-import sys, os
+import os
 import tkinter as Tkinter
-
 
 
 class ImageCropper:
@@ -75,7 +68,7 @@ class ImageCropper:
         try:
             self.img = Image.open(filename)
         except IOError:
-            print( 'Ignore: ' + filename + ' cannot be opened as an image')
+            # print( 'Ignore: ' + filename + ' cannot be opened as an image')
             return False
         # ratio = float(self.img.size[1]) / self.img.size[0]
         if self.img.size[0] > 1200:
@@ -186,18 +179,3 @@ class ImageCropper:
             return False
         self.root.mainloop()
         return True
-
-
-# cropper = ImageCropper()
-# if os.path.isdir(sys.argv[1]):
-#     cropper.set_directory(sys.argv[1])
-# elif os.path.isfile(sys.argv[1]):
-#     cropper.set_file(sys.argv[1])
-# else:
-#     # print( sys.argv[1] + ' is not a file or directory' )
-#     sys.exit()
-# if len(sys.argv) > 2:
-#     cropper.set_ratio(float(sys.argv[2]))
-
-# cropper.set_file(r"C:\Users\.HTML\Desktop\Images\zhsch\pu1.jpg")
-# cropper.run()
