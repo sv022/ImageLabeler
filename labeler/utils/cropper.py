@@ -1,5 +1,4 @@
 from PIL import Image, ImageTk
-import os
 import tkinter as Tkinter
 
 
@@ -31,19 +30,6 @@ class ImageCropper:
         self.files = []
         self.files.append(filename)
 
-    def set_directory(self, directory):
-        if not os.path.isdir(directory):
-            raise IOError(directory + ' is not a directory')
-        files = os.listdir(directory)
-        if len(files) == 0:
-            print( 'No files found in ' + directory)
-        self.files = []
-        for filename in files:
-            if filename[-11:] == 'cropped.jpg':
-                # print( 'Ignore ' + filename)
-                continue
-            self.files.append(os.path.join(directory, filename))
-
     def roll_image(self):
         while len(self.files) > 0 and self.set_image(self.files.pop(0)) == False:
             pass
@@ -57,7 +43,6 @@ class ImageCropper:
         return True
 
     def set_image(self, filename):
-
         if filename == None:
             return True
 

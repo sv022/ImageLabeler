@@ -14,6 +14,7 @@ from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
 
+
 class ImageLabelerApp:
     def __init__(self, root):
         self.root = root
@@ -24,9 +25,9 @@ class ImageLabelerApp:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(self.__appid)
         self.root.iconbitmap(r"labeler/icon.ico")
         
-        self.GALLERY_HEIGHT = 880
+        self.GALLERY_HEIGHT = 860
         self.GALLERY_WIDTH = 1000
-        self.INFO_HEIGHT = 880
+        self.INFO_HEIGHT = 860
         self.INFO_WIDTH = 410
 
         self.folder = ""
@@ -194,6 +195,7 @@ class ImageLabelerApp:
         self.project = None
         
         self.__reload_app_state(place_forget=True)
+
 
     def open_project(self):
         file_path = filedialog.askopenfilename(filetypes=[("Labeler Projects", "*.labelproj.json")])
@@ -389,8 +391,6 @@ class ImageLabelerApp:
             if class_color is not None:
                 self.class_color_map[class_name] = class_color
             elif len(self.class_color_map) < 30:
-                print(random_colors)
-                print(class_mapping.values())
                 class_color = choice(list(set(list(random_colors)) - set([x['color'] for x in class_mapping.values()])))
             else:
                 class_color = f'#{"".join(choice(hexdigits).lower() for _ in range(6))}'
@@ -417,6 +417,8 @@ class ImageLabelerApp:
         if not self.folder:
             tk.messagebox.showerror("Ошибка", "Папка не выбрана")
             return
+        if not tk.messagebox.askokcancel("Подтверждение", "Вы уверены, что хотите удалить все классы?"):
+            return
         self.classes = []
         self.index_to_class = {}
         self.class_to_index = {}
@@ -438,7 +440,8 @@ class ImageLabelerApp:
             with open(labels_path, "r", encoding="utf-8") as file:
                 self.labeled_files = json.load(file)
         except Exception as e:
-            print(f"Ошибка загрузки labels.json: {e}")
+            messagebox.showerror("Ошибка", f"Ошибка загрузки labels.json: {e}")
+            # print(f"Ошибка загрузки labels.json: {e}")
 
 
     def select_image(self, index):
@@ -557,7 +560,8 @@ class ImageLabelerApp:
                 json.dump(self.labeled_files, file, ensure_ascii=False, indent=4)
             # print(f"Labels saved successfully to {labels_path}")
         except Exception as e:
-            print(f"Ошибка при записи в файл: {e}")
+            messagebox.showerror("Ошибка", f"Ошибка при записи в файл: {e}")
+            # print(f"Ошибка при записи в файл: {e}")
 
 
     def crop_image(self):
@@ -582,6 +586,7 @@ class ImageLabelerApp:
 
     def export_to_txt(self):
         if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
             return
         
         scaler_window = tk.Toplevel(self.root)
@@ -593,6 +598,7 @@ class ImageLabelerApp:
 
     def export_to_csv(self):
         if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
             return
         
         scaler_window = tk.Toplevel(self.root)
@@ -603,6 +609,9 @@ class ImageLabelerApp:
 
     
     def plot_current_labels(self):
+        if not self.project and not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
+            return
         if self.project:
             plot_from_labels(self.project["labels"])
             return
@@ -627,6 +636,7 @@ class ImageLabelerApp:
     
     def parse_mnist(self, kind : str):
         if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
             return
         digits_loader_window = tk.Toplevel(self.root)
         x = self.root.winfo_x()
@@ -655,6 +665,7 @@ class ImageLabelerApp:
         status_label = tk.Label(digits_loader_window, text="")
         status_label.pack(pady=10, padx=20)
 
+
         def _load_digits():
             train_data_size = int(train_data_size_entry.get())
             test_data_size = int(test_data_size_entry.get())
@@ -666,9 +677,10 @@ class ImageLabelerApp:
             except Exception as e:
                 status_label.config(text="Ошибка при загрузке")
                 status_label.config(fg="red")
-                print(e)
+                # print(e)
                 return
-    
+
+
         def load_digits():
             status_label.config(text="Загрузка...")
             status_label.config(fg="grey")
@@ -688,6 +700,7 @@ class ImageLabelerApp:
 
     def parse_mnist_digits(self):
         self.parse_mnist("digits")
+
 
     def parse_mnist_fashion(self):
         self.parse_mnist("fashion")

@@ -30,13 +30,12 @@ idx_dt = {
 }
 
 def random_sample(data_train: np.array, labels_test : np.array, size: int = 1) -> tuple[list, list]:
-
     data_train_norm = [[np.around(int(x) / 255, decimals=2) for x in sample.flatten()] for sample in data_train]
 
     res_train = []
     res_test = []
 
-    for i in range(size):
+    for _ in range(size):
         index = np.random.randint(0, len(data_train_norm))
         res_train.append(data_train_norm[index])
         res_test.append(labels_test[index])

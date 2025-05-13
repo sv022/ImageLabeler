@@ -40,7 +40,7 @@ class Scaler:
         try:
             labelName = self.labelMap[image_name]
         except KeyError as e:
-            print(f"Warning: File {e} not labeled.")
+            # print(f"Warning: File {e} not labeled.")
             return
 
         with open(self.outputPath, "a") as output_file:
@@ -63,7 +63,7 @@ class Scaler:
         try:
             labelName = self.labelMap[image_name]
         except KeyError as e:
-            print(f"Warning: File {e} not labeled.")
+            # print(f"Warning: File {e} not labeled.")
             return
 
         flattened_values = normalized_image.flatten()
@@ -114,7 +114,8 @@ class Scaler:
                 try:
                     self.process_image_csv(image_path)
                 except Exception as e:
-                    print(f"Error processing {file_name}: {str(e)}")
+                    # print(f"Error processing {file_name}: {str(e)}")
+                    pass
 
 
 class ImageScaler:
@@ -162,7 +163,6 @@ class ImageScaler:
             with open(f"{self.folder}/labels.json", 'r', encoding='utf-8') as file:
                 self.sc.set_label_map(json.load(file))
         except Exception as e:
-            print(self.folder)
             self.error_label.config(text=f"Выбранная папка не содержит файл labels.json")
             self.error_label.config(foreground="red")
             return

@@ -27,7 +27,7 @@ def plot_from_labels(labels_path: str):
                [{"type": "bar"}, {"type": "heatmap"}]],
         subplot_titles=(
             "Распределение классов",
-            "Class Proportion",
+            "Круговая диаграмма распределения классов",
             "Наиболее частые / редкие классы"
         )
     )
@@ -68,7 +68,7 @@ def plot_from_labels(labels_path: str):
             y=top_classes,
             orientation='h',
             marker_color='green',
-            name="Most Frequent",
+            name="Наиболее частые",
             text=top_counts
         ),
         row=2, col=1
@@ -80,7 +80,7 @@ def plot_from_labels(labels_path: str):
             y=bottom_classes,
             orientation='h',
             marker_color='red',
-            name="Least Frequent",
+            name="Наиболее редкие",
             text=bottom_counts
         ),
         row=2, col=1
@@ -125,7 +125,7 @@ def plot_from_file(file_path: str):
                [{"type": "heatmap"}, {"type": "heatmap"}]],
         subplot_titles=(
             "Распределение классов",
-            "Круговая диаграмма классов",
+            "Круговая диаграмма распределения классов",
             "Пример изображения" if samples.shape[1] == 784 else "Тепловая карта",
         )
     )
