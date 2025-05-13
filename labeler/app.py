@@ -389,7 +389,9 @@ class ImageLabelerApp:
             if class_color is not None:
                 self.class_color_map[class_name] = class_color
             elif len(self.class_color_map) < 30:
-                class_color = choice(list(set(list(random_colors)) - set(list(self.class_color_map.values()))))
+                print(random_colors)
+                print(class_mapping.values())
+                class_color = choice(list(set(list(random_colors)) - set([x['color'] for x in class_mapping.values()])))
             else:
                 class_color = f'#{"".join(choice(hexdigits).lower() for _ in range(6))}'
 

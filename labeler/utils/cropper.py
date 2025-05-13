@@ -40,7 +40,7 @@ class ImageCropper:
         self.files = []
         for filename in files:
             if filename[-11:] == 'cropped.jpg':
-                print( 'Ignore ' + filename)
+                # print( 'Ignore ' + filename)
                 continue
             self.files.append(os.path.join(directory, filename))
 
@@ -98,11 +98,11 @@ class ImageCropper:
 
     def __on_mouse_down(self, event):
         self.box[0], self.box[1] = event.x, event.y
-        print( "top left coordinates: %s/%s" % (event.x, event.y) )
+        # print( "top left coordinates: %s/%s" % (event.x, event.y) )
         self.canvas.delete(self.message)
 
     def __on_mouse_release(self, event):
-        print( "bottom_right coordinates: %s/%s" % (self.box[2], self.box[3]) )
+        # print( "bottom_right coordinates: %s/%s" % (self.box[2], self.box[3]) )
         self.box[2], self.box[3] = event.x, event.y
 
     def __crop_image(self):
@@ -145,7 +145,7 @@ class ImageCropper:
             self.root.destroy()
 
     def __on_keyUP(self, event):
-        print( 'UP' )
+        # print( 'UP' )
         self.box[1] = self.box[1] - 1
         self.box[3] = self.box[3] - 1
         self.__refresh_rectangle()
@@ -154,16 +154,16 @@ class ImageCropper:
         self.box[1] = self.box[1] + 1
         self.box[3] = self.box[3] + 1
         self.__refresh_rectangle()
-        print( 'Down' )
+        # print( 'Down' )
 
     def __on_keyLeft(self, event):
-        print( 'Left' )
+        # print( 'Left' )
         self.box[0] = self.box[0] - 1
         self.box[2] = self.box[2] - 1
         self.__refresh_rectangle()
 
     def __on_keyRight(self, event):
-        print( 'Right' )
+        # print( 'Right' )
         self.box[0] = self.box[0] + 1
         self.box[2] = self.box[2] + 1
         self.__refresh_rectangle()
