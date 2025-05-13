@@ -124,7 +124,7 @@ class ImageScaler:
         self.folder_label = Label(root)
         self.folder_label.pack(pady=10)
         self.error_label = Label(root, foreground="red")
-        self.error_label.pack(pady=10)
+        self.error_label.pack(pady=5)
 
         self.sc = Scaler(outDir=folderPath)
 
@@ -190,7 +190,7 @@ class ImageScaler:
         self.dimensions_frame.pack(pady=10)
 
         self.process_button = Button(self.root, text="Экспорт", command=self.process_folder)
-        self.process_button.pack(pady=10)
+        self.process_button.pack(pady=5)
 
 
     def process_folder(self):

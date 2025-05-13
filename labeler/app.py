@@ -13,6 +13,7 @@ from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
+from .utils.styles import widget_styles
 
 
 class ImageLabelerApp:
@@ -62,16 +63,24 @@ class ImageLabelerApp:
         self.info_frame.place(x=1020, y=10)
 
         self.info_label = tk.Label(self.info_frame, text="Выберите папку", font=("Arial", 12), background=colors['gray'])
+        self.info_label.configure(widget_styles['label_bold'])
         self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
 
-        self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", width=15, command=self.select_folder)
-        self.select_folder_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 100)
+        self.welcome_label = tk.Label(self.gallery_container, text="Добро пожаловать!")
+        self.welcome_label.configure(widget_styles['startscreen_label'])
+        self.welcome_label.place(x=self.GALLERY_WIDTH // 2 - 85, y=100)
 
-        self.open_project_button = tk.Button(self.gallery_container, text="Открыть проект", width=15, command=self.open_project)
-        self.open_project_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2 - 50)
+        self.select_folder_button = tk.Button(self.gallery_container, text="Выберите папку", command=self.select_folder)
+        self.select_folder_button.configure(widget_styles['startscreen_button'])
+        self.select_folder_button.place(x=self.GALLERY_WIDTH // 2 - 80, y=self.GALLERY_HEIGHT // 2 - 100)
 
-        self.create_project_button = tk.Button(self.gallery_container, text="Создать проект", width=15, command=self.create_project)
-        self.create_project_button.place(x=self.GALLERY_WIDTH // 2, y=self.GALLERY_HEIGHT // 2)
+        self.open_project_button = tk.Button(self.gallery_container, text="Открыть проект", command=self.open_project)
+        self.open_project_button.configure(widget_styles['startscreen_button'])
+        self.open_project_button.place(x=self.GALLERY_WIDTH // 2 - 80, y=self.GALLERY_HEIGHT // 2 - 50)
+
+        self.create_project_button = tk.Button(self.gallery_container, text="Создать проект", command=self.create_project)
+        self.create_project_button.configure(widget_styles['startscreen_button'])
+        self.create_project_button.place(x=self.GALLERY_WIDTH // 2 - 80, y=self.GALLERY_HEIGHT // 2)
 
         self.initToolbar()
 
@@ -100,8 +109,9 @@ class ImageLabelerApp:
         else:
             try:
                 self.info_label.place_forget()
-                self.info_label = tk.Label(self.info_frame, text="Выберите изображение", font=("Arial", 12), background=colors['gray'])
-                self.info_label.place(x=self.INFO_WIDTH // 2 - 70, y=self.INFO_HEIGHT // 2)
+                self.info_label = tk.Label(self.info_frame, text="Выберите изображение")
+                self.info_label.configure(widget_styles['label_bold'])
+                self.info_label.place(x=self.INFO_WIDTH // 2 - 50, y=self.INFO_HEIGHT // 2)
             except:
                 pass
         try:
@@ -118,6 +128,7 @@ class ImageLabelerApp:
     
     def __reload_app_state(self, place_forget=False, dump_project_data=False):
         if place_forget:
+            self.welcome_label.place_forget()
             self.select_folder_button.place_forget()
             self.create_project_button.place_forget()
             self.open_project_button.place_forget()
@@ -136,6 +147,8 @@ class ImageLabelerApp:
 
         self.load_class_config()
         self.labeled_files = {}
+        self.info_label.place_forget()
+        self.info_label.place(x=self.INFO_WIDTH // 2 - 90, y=self.INFO_HEIGHT // 2)
         self.info_label.config(text="Выберите изображение")
         self.load_existing_labels()
         self.load_images(self.folder)
@@ -347,7 +360,9 @@ class ImageLabelerApp:
             return
         self.class_window = tk.Toplevel(self.root)
         self.class_window.title("Настройка классов")
-        self.class_window.geometry("400x500+300+200")
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        self.class_window.geometry(f"400x500+{x+300}+{y+200}")
 
         
         self.class_entries = []
@@ -480,18 +495,21 @@ class ImageLabelerApp:
                 pass
             return
         
-        self.crop_image_button = tk.Button(self.info_frame, text="Обрезать Изображение", font=("Arial", 12), command=self.crop_image, background=colors['gray'])
+        self.crop_image_button = tk.Button(self.info_frame, text="Обрезать Изображение", command=self.crop_image)
+        self.crop_image_button.configure(widget_styles['button_flat'])
         self.crop_image_button.place(x=10, y=IMG_size + 20)
         self.crop_save_copy_check = tk.Checkbutton(self.info_frame, text="Сохранить копию", font=("Arial", 12), variable=self.save_copy_check, onvalue=True, offvalue=False, background=colors['gray'])
         self.crop_save_copy_check.place(x=10, y=IMG_size + 60)
         
-        self.classes_select_label = tk.Label(self.info_frame, text="Выберите класс", font=("Arial", 12), background=colors['gray'])
+        self.classes_select_label = tk.Label(self.info_frame, text="Выберите класс")
+        self.classes_select_label.configure(widget_styles['label_bold'])
         self.classes_select_label.place(x=10, y=IMG_size + 100)
         self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
         self.classes_select.place(x=10, y=IMG_size + 130, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
 
-        self.image_info_label = tk.Label(self.info_frame, text="Информация об изображении", font=("Arial", 12), background=colors['gray'])
+        self.image_info_label = tk.Label(self.info_frame, text="Информация об изображении")
+        self.image_info_label.configure(widget_styles['label_bold'])
         self.image_info_label.place(x=10, y=IMG_size + 170)
 
         self.image_name_label = tk.Label(self.info_frame, text=f"Название файла: {image_name}", font=("Arial", 10), background=colors['gray'])
@@ -590,7 +608,9 @@ class ImageLabelerApp:
             return
         
         scaler_window = tk.Toplevel(self.root)
-        scaler_window.geometry("300x200")
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        scaler_window.geometry(f"300x200+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
         scaler = ImageScaler(scaler_window, "txt", self.folder)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
@@ -602,7 +622,9 @@ class ImageLabelerApp:
             return
         
         scaler_window = tk.Toplevel(self.root)
-        scaler_window.geometry("300x200")
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        scaler_window.geometry(f"300x200+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
         scaler = ImageScaler(scaler_window, "csv", self.folder)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
@@ -641,7 +663,7 @@ class ImageLabelerApp:
         digits_loader_window = tk.Toplevel(self.root)
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        digits_loader_window.geometry(f"400x300+{x+250}+{y+200}")
+        digits_loader_window.geometry(f"400x250+{x+250}+{y+200}")
         digits_loader_window.resizable(False, False)
         digits_loader_window.title(f"Загрузка MNIST {kind}")
 
@@ -693,7 +715,7 @@ class ImageLabelerApp:
             
         
         load_digits_btn = tk.Button(digits_loader_window, text="Загрузить", width=20, command=load_digits)
-        load_digits_btn.pack(pady=40, padx=20)
+        load_digits_btn.pack(pady=20, padx=20)
         
         digits_loader_window.protocol("WM_DELETE_WINDOW", digits_loader_window.destroy)
 
