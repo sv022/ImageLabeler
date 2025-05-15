@@ -24,7 +24,11 @@ class ImageLabelerApp:
         self.root.resizable(False, False)
         self.__appid = 'svapp.imagelabeler.v1' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(self.__appid)
-        self.root.iconbitmap(r"labeler/icon.ico")
+
+        try:
+            self.root.iconbitmap(r"appdata/icon.ico")
+        except Exception:
+            pass
         
         self.GALLERY_HEIGHT = 860
         self.GALLERY_WIDTH = 1000
