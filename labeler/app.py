@@ -14,6 +14,7 @@ from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
 from .utils.styles import widget_styles
+from .utils.label_parser import LabelParser
 
 
 class ImageLabelerApp:
@@ -183,6 +184,8 @@ class ImageLabelerApp:
         classMenu = Menu(menubar)
         classMenu.add_command(label="Изменить классы", underline=0, command=self.create_class_config)
         classMenu.add_command(label="Очистить классы", underline=0, command=self.clear_classes)
+        classMenu.add_command(label="Определить классы по файлам", underline=0, command=self.create_labels_from_filenames)
+        classMenu.add_command(label="Определить классы по папкам", underline=0, command=lambda: 0)
         menubar.add_cascade(label="Настройка классов", underline=0, menu=classMenu)
 
         exportMenu = Menu(menubar)
@@ -740,3 +743,28 @@ class ImageLabelerApp:
 
     def parse_mnist_fashion(self):
         self.parse_mnist("fashion")
+
+    
+    def create_labels_from_filenames(self):
+        if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
+            return
+        
+        parser_window = tk.Toplevel(self.root)
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        parser_window.geometry(f"400x250+{x+250}+{y+200}")
+        parser_window.resizable(False, False)
+        parser_window.title(f"Создать метки по названиям файлов")
+
+        if self.project is not None:
+            labels_path = self.project["labels"]
+            config_path = self.project["config"]
+        else:
+            labels_path = os.path.join(self.folder, "labels.json")
+            config_path = os.path.join(self.folder, "config.json")
+        
+        parser = LabelParser(parser_window)
+        parser.parse_filenames(self.folder, labels_path, config_path)
+
+        parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)        
