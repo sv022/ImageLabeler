@@ -616,7 +616,12 @@ class ImageLabelerApp:
         y = self.root.winfo_y()
         scaler_window.geometry(f"300x200+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
-        scaler = ImageScaler(scaler_window, "txt", self.folder)
+
+        folder = self.folder if self.project is None else self.project["root"]
+        labels = self.project["labels"] if self.project is not None else os.path.join(folder, "labels.json")
+        name = self.project["name"] if self.project is not None else os.path.basename(folder)
+
+        scaler = ImageScaler(scaler_window, "txt", folder, labels, name)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
 
@@ -630,7 +635,12 @@ class ImageLabelerApp:
         y = self.root.winfo_y()
         scaler_window.geometry(f"300x200+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
-        scaler = ImageScaler(scaler_window, "csv", self.folder)
+
+        folder = self.folder if self.project is None else self.project["root"]
+        labels = self.project["labels"] if self.project is not None else os.path.join(folder, "labels.json")
+        name = self.project["name"] if self.project is not None else os.path.basename(folder)
+
+        scaler = ImageScaler(scaler_window, "csv", folder, labels, name)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
     

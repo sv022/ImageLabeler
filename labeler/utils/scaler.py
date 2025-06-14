@@ -7,10 +7,11 @@ from datetime import datetime
 
 
 class Scaler:
-    def __init__(self, outDir = 'out/'):
+    def __init__(self, outDir = 'out/', name = ""):
         self.resolution = (64, 64)
         self.outDir = os.path.join(outDir, 'output')
         self.outputPath = ""
+        self.outputName = name
         self.labelMap = {}
         self.labels = []
 
@@ -82,7 +83,7 @@ class Scaler:
             return
         
         now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
-        txt_path = os.path.join(self.outDir, f"output_{now}.txt")
+        txt_path = os.path.join(self.outDir, f"{self.outputName}_{now}.txt")
         self.outputPath = txt_path
         if not os.path.isfile(txt_path):
             with open(txt_path, "w") as output_file:
@@ -100,7 +101,7 @@ class Scaler:
             return
         
         now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
-        csv_path = os.path.join(self.outDir, f"output_{now}.csv")
+        csv_path = os.path.join(self.outDir, f"{self.outputName}_{now}.csv")
         self.outputPath = csv_path
         if not os.path.isfile(csv_path):
             with open(csv_path, "w") as output_file:
@@ -119,48 +120,30 @@ class Scaler:
 
 
 class ImageScaler:
-    def __init__(self, root, exportFormat : str, folderPath = "", ):
+    def __init__(self, root, exportFormat : str, folderPath = "", labelsPath = "", name = ""):
         self.root = root
+        self.name = name
         self.folder_label = Label(root)
         self.folder_label.pack(pady=10)
         self.error_label = Label(root, foreground="red")
         self.error_label.pack(pady=5)
 
-        self.sc = Scaler(outDir=folderPath)
+        self.sc = Scaler(outDir=folderPath, name=name)
 
         self.folder = folderPath
+        self.labels = labelsPath
 
         if exportFormat not in {"txt", "csv"}:
             self.export_format = "txt"
         else:
             self.export_format = exportFormat
 
-
-        if folderPath == "":
-            select_folder_button = Button(root, text="Выбрать папку", command=self.select_folder)
-            select_folder_button.pack(pady=10)
-        else:
-            self.initUI()
-
-
-    def select_folder(self):
-        folder_path = filedialog.askdirectory()
-        if not folder_path:
-            return
-        if not os.path.isdir(folder_path):
-            self.error_label.config(text="Неверный путь.")
-            return
-        if not os.path.isfile(os.path.join(folder_path, "labels.json")):
-            self.error_label.config(text="Выбранная папка не содержит файл labels.json.")
-            return
-        self.folder_label.config(text=folder_path)
-        self.folder = folder_path
-
         self.initUI()
+
 
     def initUI(self):
         try:
-            with open(f"{self.folder}/labels.json", 'r', encoding='utf-8') as file:
+            with open(self.labels, 'r', encoding='utf-8') as file:
                 self.sc.set_label_map(json.load(file))
         except Exception as e:
             self.error_label.config(text=f"Выбранная папка не содержит файл labels.json")
@@ -194,13 +177,6 @@ class ImageScaler:
 
 
     def process_folder(self):
-        if self.export_format == "txt":
-            self.process_folder_txt()
-        elif self.export_format == "csv":
-            self.process_folder_csv()
-
-
-    def process_folder(self):
         if self.width_entry.get() == "" or self.height_entry.get() == "":
             self.error_label.config(text="Укажите разрешение.")
             self.error_label.config(foreground="red")
@@ -209,10 +185,11 @@ class ImageScaler:
         self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get())))
 
         try:
+            folder = os.path.join(self.folder, "images")
             if self.export_format == "txt":
-                self.sc.process_folder_txt(self.folder)
+                self.sc.process_folder_txt(folder)
             elif self.export_format == "csv":
-                self.sc.process_folder_csv(self.folder)
+                self.sc.process_folder_csv(folder)
             else:
                 return
         except Exception as e:
@@ -220,5 +197,5 @@ class ImageScaler:
             self.error_label.config(foreground="red")
             return
 
-        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в output/output.{self.export_format}")
+        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в /{self.name}.{self.export_format}")
         self.error_label.config(foreground="green")
