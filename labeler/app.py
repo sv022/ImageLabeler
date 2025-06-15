@@ -533,7 +533,7 @@ class ImageLabelerApp:
         self.image_extension_label.place(x=10, y=IMG_size + 240)
         self.image_size_label.place(x=10, y=IMG_size + 270)
 
-        image_name = os.path.basename(image_path)
+        image_name = os.path.relpath(image_path, self.initial_folder)
         if image_name in self.labeled_files:
             class_number = self.labeled_files[image_name]
             self.classes_select.set(self.index_to_class.get(int(class_number), ""))
@@ -555,7 +555,7 @@ class ImageLabelerApp:
 
             label = tk.Label(self.gallery_frame, image=photo)
             label.image = photo
-            base_image_name = os.path.basename(image_name)
+            base_image_name = os.path.relpath(image_name, self.initial_folder)
             image_bg_color = self.__get_image_bg_color(base_image_name)
             label.configure({"background" : image_bg_color})
             label.bind("<Button-1>", lambda event, idx=idx-len(self.nested_folders): self.select_image(idx))
@@ -616,10 +616,10 @@ class ImageLabelerApp:
         class_number = self.class_to_index.get(class_name)
         if class_number is None:
             return
-        image_name = os.path.basename(self.image_files[self.selected_index])
+        image_name = os.path.relpath(self.image_files[self.selected_index], self.initial_folder)
         self.labeled_files[image_name] = str(class_number)
         image_bg_color = self.__get_image_bg_color(image_name)
-        list(self.gallery_frame.children.values())[self.selected_index].configure({"background" : image_bg_color})
+        list(self.gallery_frame.children.values())[self.selected_index + len(self.nested_folders)].configure({"background" : image_bg_color})
         self.save_labels()
 
 
