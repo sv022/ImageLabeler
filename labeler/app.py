@@ -28,7 +28,11 @@ class ImageLabelerApp:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(self.__appid)
 
         try:
-            self.root.iconbitmap(r"appdata/icon.ico")
+            self.root.iconbitmap(r"public/icon.ico")
+        except Exception:
+            pass
+        try:
+            self.root.iconbitmap(resource(r"public/icon.ico"))
         except Exception:
             pass
         
