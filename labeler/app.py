@@ -537,7 +537,7 @@ class ImageLabelerApp:
         self.classes_select_label = tk.Label(self.info_frame, text="Выберите класс")
         self.classes_select_label.configure(widget_styles['label_bold'])
         self.classes_select_label.place(x=10, y=IMG_size + 100)
-        self.classes_select = ttk.Combobox(self.info_frame, values=self.classes, state="readonly")
+        self.classes_select = ttk.Combobox(self.info_frame, values=[' '] + self.classes, state="readonly")
         self.classes_select.place(x=10, y=IMG_size + 130, width=self.INFO_WIDTH - 20)
         self.classes_select.bind("<<ComboboxSelected>>", self.save_label)
 
@@ -634,10 +634,15 @@ class ImageLabelerApp:
             return
         class_name = self.classes_select.get()
         class_number = self.class_to_index.get(class_name)
-        if class_number is None:
-            return
         image_name = os.path.relpath(self.image_files[self.selected_index], self.initial_folder)
-        self.labeled_files[image_name] = str(class_number)
+
+        if class_name == " ":
+            self.labeled_files.pop(os.path.relpath(self.image_files[self.selected_index], self.initial_folder), None)
+        elif class_number is not None:
+            self.labeled_files[image_name] = str(class_number)
+        else:
+            return
+
         image_bg_color = self.__get_image_bg_color(image_name)
         list(self.gallery_frame.children.values())[self.selected_index + len(self.nested_folders)].configure({"background" : image_bg_color})
         self.save_labels()
