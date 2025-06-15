@@ -15,6 +15,7 @@ from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
 from .utils.styles import widget_styles
 from .utils.label_parser import LabelParser
+from.utils.resource import resource
 
 
 class ImageLabelerApp:
@@ -35,6 +36,8 @@ class ImageLabelerApp:
         self.GALLERY_WIDTH = 1000
         self.INFO_HEIGHT = 860
         self.INFO_WIDTH = 410
+
+        self.ASSETS_FOLDER_BG = 'labeler/assets/gallery_folder_bg.png'
 
         self.folder = ""
         self.project = None
@@ -156,6 +159,7 @@ class ImageLabelerApp:
         self.info_label.place(x=self.INFO_WIDTH // 2 - 90, y=self.INFO_HEIGHT // 2)
         self.info_label.config(text="Выберите изображение")
         self.load_existing_labels()
+        self.load_nested_folders(self.folder)
         self.load_images(self.folder)
 
 
@@ -210,6 +214,7 @@ class ImageLabelerApp:
         if not folder_path:
             return
         self.folder = folder_path
+        self.initial_folder = folder_path
         self.config_path = os.path.join(self.folder, "config.json")
 
         self.project = None
@@ -230,6 +235,7 @@ class ImageLabelerApp:
             return
         
         self.folder = self.project["images"]
+        self.initial_folder = self.project["images"]
         self.config_path = self.project["config"]
 
         self.__reload_app_state(place_forget=True)
@@ -542,7 +548,7 @@ class ImageLabelerApp:
         pad_y = 5
         img_per_row = 10
 
-        for idx, image_name in enumerate(self.image_files):
+        for idx, image_name in enumerate(self.image_files, start=len(self.nested_folders)):
             image = Image.open(image_name)
             image = image.resize((IMG_size, IMG_size))
             photo = ImageTk.PhotoImage(image)
@@ -552,7 +558,51 @@ class ImageLabelerApp:
             base_image_name = os.path.basename(image_name)
             image_bg_color = self.__get_image_bg_color(base_image_name)
             label.configure({"background" : image_bg_color})
-            label.bind("<Button-1>", lambda event, idx=idx: self.select_image(idx))
+            label.bind("<Button-1>", lambda event, idx=idx-len(self.nested_folders): self.select_image(idx))
+            label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
+
+        self.gallery_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+
+    def load_nested_folders(self, folder_path):
+        self.nested_folders = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
+        if folder_path != self.initial_folder:
+            self.nested_folders = ['..'] + self.nested_folders
+
+        pad_x = 5
+        pad_y = 5
+        img_per_row = 10
+
+        for idx, folder in enumerate(self.nested_folders):
+            try:
+                image = Image.open(resource(self.ASSETS_FOLDER_BG))
+            except Exception as e:
+                image = Image.open(self.ASSETS_FOLDER_BG)
+            photo = ImageTk.PhotoImage(image)
+            folder_name = os.path.basename(folder)
+
+            label = tk.Label(
+                self.gallery_frame, 
+                image=photo, 
+                text=folder_name, 
+                compound=tk.CENTER, 
+                bg=colors["gray"], 
+                font=("Arial", 12, "bold"),
+                fg=colors["gray"]
+            )
+
+            label.image = photo
+
+            def on_folder_click(e, folder_name=folder_name):
+                if folder_name == "..":
+                    self.folder = self.initial_folder
+                else:
+                    self.folder = os.path.join(self.folder, folder_name)
+                self.__reload_app_state(place_forget=True)
+
+            label.bind("<Button-1>", on_folder_click)
+
             label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
 
         self.gallery_frame.update_idletasks()
