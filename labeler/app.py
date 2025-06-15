@@ -108,24 +108,33 @@ class ImageLabelerApp:
     
     def __clear_info_frame(self, clear_gallery=True):
         try:
-            self.crop_save_copy_check.place_forget()
-            self.crop_image_button.place_forget()
-            self.classes_select_label.place_forget()
-            self.classes_select.place_forget()
-            self.image_info_label.place_forget()
-            self.image_name_label.place_forget()
             self.image_extension_label.place_forget()
             self.image_size_label.place_forget()
         except Exception:
             pass
-        else:
-            try:
-                self.info_label.place_forget()
-                self.info_label = tk.Label(self.info_frame, text="Выберите изображение")
-                self.info_label.configure(widget_styles['label_bold'])
-                self.info_label.place(x=self.INFO_WIDTH // 2 - 50, y=self.INFO_HEIGHT // 2)
-            except:
-                pass
+        try:
+            self.image_info_label.place_forget()
+            self.image_name_label.place_forget()
+        except Exception:
+            pass
+        try:
+            self.classes_not_set_label.place_forget()
+        except Exception:
+            pass
+        try:
+            self.crop_save_copy_check.place_forget()
+            self.crop_image_button.place_forget()
+            self.classes_select_label.place_forget()
+            self.classes_select.place_forget()
+        except Exception:
+            pass
+        try:
+            self.info_label.place_forget()
+            self.info_label = tk.Label(self.info_frame, text="Выберите изображение")
+            self.info_label.configure(widget_styles['label_bold'])
+            self.info_label.place(x=self.INFO_WIDTH // 2 - 50, y=self.INFO_HEIGHT // 2)
+        except:
+            pass
         try:
             self.classes_select.place_forget()
         except Exception:
@@ -458,6 +467,13 @@ class ImageLabelerApp:
 
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.index_to_class, f, ensure_ascii=False, indent=4)
+        
+        if self.project is not None:
+            with open(self.project["labels"], "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+        else:
+            with open(os.path.join(self.folder, "labels.json"), "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
 
         self.__restart_programm()
         
