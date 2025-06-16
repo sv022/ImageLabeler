@@ -202,7 +202,7 @@ class ImageLabelerApp:
         classMenu.add_command(label="Изменить классы", underline=0, command=self.create_class_config)
         classMenu.add_command(label="Очистить классы", underline=0, command=self.clear_classes)
         classMenu.add_command(label="Определить классы по файлам", underline=0, command=self.create_labels_from_filenames)
-        classMenu.add_command(label="Определить классы по папкам", underline=0, command=lambda: 0)
+        classMenu.add_command(label="Определить классы по папкам", underline=0, command=self.create_labels_from_folders)
         menubar.add_cascade(label="Настройка классов", underline=0, menu=classMenu)
 
         exportMenu = Menu(menubar)
@@ -847,3 +847,19 @@ class ImageLabelerApp:
         parser.parse_filenames(self.folder, labels_path, config_path)
 
         # parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)             
+
+
+    def create_labels_from_folders(self):
+            if not self.folder:
+                messagebox.showwarning("Предупреждение", "Папка не выбрана")
+                return
+
+            if self.project is not None:
+                labels_path = self.project["labels"]
+                config_path = self.project["config"]
+            else:
+                labels_path = os.path.join(self.folder, "labels.json")
+                config_path = os.path.join(self.folder, "config.json")
+            
+            parser = LabelParser(None)
+            parser.parse_folders(self.folder, labels_path, config_path)

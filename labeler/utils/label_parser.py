@@ -1,7 +1,7 @@
 import json
 import os
 from random import choice
-from tkinter import IntVar, Label, Radiobutton, Button, Variable, ttk
+from tkinter import IntVar, Label, Radiobutton, Button, Variable, messagebox, ttk
 from .colors import random_colors
 from .styles import widget_styles
 
@@ -95,6 +95,7 @@ class LabelParser:
         self.save(self.labels_path, self.config_path)
 
         self.folder_label.config(text=f"Папка обработана\n{len(self.files) + sum(len(v) for v in self.nested_files.values())} изображений")
+        messagebox.showinfo("Успех", "Папка обработана. Перезапустите программу чтобы увидеть изменения.")
 
     
     def save(self, labels: str, config : str):
@@ -108,3 +109,31 @@ class LabelParser:
         self._init_UI_files(folder)
         self.labels_path = labels
         self.config_path = config
+
+    
+    def parse_folders(self, folder : str, labels : str, config : str):
+        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
+        class_mapping = {}
+        nested_folders = [f for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f))]
+        
+        for d in nested_folders:
+            files = os.listdir(os.path.join(folder, d))
+            files = [os.path.join(d, f) for f in files if f.lower().endswith(supported_formats)]
+
+            self.label_map[d] = len(self.label_map)
+
+            class_color = choice(list(set(list(random_colors)) - set([x['color'] for x in class_mapping.values()])))
+            class_mapping[d] = {
+                "index": self.label_map[d],
+                "color": class_color
+            }
+
+            for f in files:
+                self.labels[f] = self.label_map[d]
+
+        self.class_mapping = class_mapping
+
+        self.save(labels, config)
+        
+        messagebox.showinfo("Успех", "Папка обработана. Перезапустите программу чтобы увидеть изменения.")
+        
