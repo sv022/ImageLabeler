@@ -23,8 +23,9 @@ widget_styles = {
         "highlightbackground": "#8f8f9d",
     },
     "button_flat_green": {
-        "font": ("Arial", 12),
+        "font": ("Arial", 10, "bold"),
         "background": "#00c3a3",
+        "foreground": "white",
         "borderwidth": 0,
         "highlightbackground": "#8f8f9d",
     },

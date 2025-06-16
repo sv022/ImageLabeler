@@ -254,6 +254,7 @@ class ImageLabelerApp:
         self.__reload_app_state(place_forget=True)
         
 
+    # TODO: Fix AttributeError: 'ImageLabelerApp' object has no attribute 'initial_folder'
     def create_project(self):
         folder_path = filedialog.askdirectory()
         if not folder_path:
@@ -558,7 +559,7 @@ class ImageLabelerApp:
             class_number = self.labeled_files[image_name]
             self.classes_select.set(self.index_to_class.get(int(class_number), ""))
 
-
+    # TODO: async loading 
     def load_images(self, folder_path):
         supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
         self.image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
@@ -580,8 +581,8 @@ class ImageLabelerApp:
             label.configure({"background" : image_bg_color})
             label.bind("<Button-1>", lambda event, idx=idx-len(self.nested_folders): self.select_image(idx))
             label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
+            self.gallery_frame.update_idletasks()
 
-        self.gallery_frame.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 
@@ -828,8 +829,8 @@ class ImageLabelerApp:
         parser_window = tk.Toplevel(self.root)
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        parser_window.geometry(f"400x250+{x+250}+{y+200}")
-        parser_window.resizable(False, False)
+        parser_window.geometry(f"400x420+{x+250}+{y+200}")
+        parser_window.resizable(False, True)
         parser_window.title(f"Создать метки по названиям файлов")
 
         if self.project is not None:
@@ -842,4 +843,4 @@ class ImageLabelerApp:
         parser = LabelParser(parser_window)
         parser.parse_filenames(self.folder, labels_path, config_path)
 
-        parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)        
+        # parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)        
