@@ -572,6 +572,10 @@ class ImageLabelerApp:
         pad_y = 5
         img_per_row = 10
 
+        loading_label = tk.Label(self.root, text="Загрузка...", background=colors['gray'], font=("Arial", 12))
+        loading_label.place(x=self.GALLERY_WIDTH // 2 - 20, y=self.GALLERY_HEIGHT // 2 - 20)
+        self.gallery_frame.update_idletasks()
+
         for idx, image_name in enumerate(self.image_files, start=len(self.nested_folders)):
             image = Image.open(image_name)
             image = image.resize((IMG_size, IMG_size))
@@ -584,8 +588,9 @@ class ImageLabelerApp:
             label.configure({"background" : image_bg_color})
             label.bind("<Button-1>", lambda event, idx=idx-len(self.nested_folders): self.select_image(idx))
             label.grid(row=idx // img_per_row, column=idx % img_per_row, padx=pad_x, pady=pad_y)
-            self.gallery_frame.update_idletasks()
 
+        loading_label.destroy()
+        self.gallery_frame.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 
