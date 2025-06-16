@@ -389,7 +389,8 @@ class ImageLabelerApp:
         self.class_window.title("Настройка классов")
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        self.class_window.geometry(f"400x500+{x+300}+{y+200}")
+        self.class_window.geometry(f"350x400+{x+300}+{y+200}")
+        self.class_window.resizable(False, True)
 
         
         self.class_entries = []
@@ -405,15 +406,17 @@ class ImageLabelerApp:
         
         self.add_class_field()
         
-        add_button = tk.Button(self.class_window, text="+", command=self.add_class_field)
+        add_button = tk.Button(self.class_window, text="+", command=self.add_class_field, width=2, height=1)
+        add_button.configure(widget_styles['button_flat_blue'])
         add_button.pack(pady=5)
 
         hint_text = tk.Label(self.class_window, text="Чтобы удалить класс, оставьте поле пустым", font=("Arial", 8), foreground="gray")
         hint_text.pack(pady=10)
-        save_button = tk.Button(self.class_window, text="Сохранить", command=lambda: self.save_classes())
-        save_button.pack(pady=5)
         hint_text2 = tk.Label(self.class_window, text="Для применения изменений программа перезапустится", font=("Arial", 8), foreground="#FAA0A0")
-        hint_text2.pack(pady=5)
+        hint_text2.pack(pady=5, side=tk.BOTTOM)
+        save_button = tk.Button(self.class_window, text="Сохранить", command=lambda: self.save_classes())
+        save_button.configure(widget_styles['button_flat_green'])
+        save_button.pack(pady=5, side=tk.BOTTOM)
 
 
     def add_class_field(self):
@@ -843,4 +846,4 @@ class ImageLabelerApp:
         parser = LabelParser(parser_window)
         parser.parse_filenames(self.folder, labels_path, config_path)
 
-        # parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)        
+        # parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)             
