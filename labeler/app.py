@@ -41,6 +41,13 @@ class ImageLabelerApp:
         self.INFO_HEIGHT = 860
         self.INFO_WIDTH = 410
 
+        self.MAX_IMAGES = 4900
+
+        self.IMG_SIZE = 170
+        self.IMG_PER_ROW = 5
+        self.IMG_PAD_X = 5
+        self.IMG_PAD_Y = 5
+
         self.ASSETS_FOLDER_BG = 'labeler/assets/gallery_folder_bg.png'
 
         self.folder = ""
@@ -562,15 +569,32 @@ class ImageLabelerApp:
             class_number = self.labeled_files[image_name]
             self.classes_select.set(self.index_to_class.get(int(class_number), ""))
 
-    # TODO: async loading 
-    def load_images(self, folder_path):
-        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
-        self.image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
+    
+    def _set_image_size(self):
+        self.IMG_SIZE = 85
+        self.IMG_PER_ROW = self.GALLERY_WIDTH // self.IMG_SIZE - 1
+        if len(self.image_files) > 500:
+            self.IMG_SIZE = 58
+            self.IMG_PAD_X = 2
+            self.IMG_PAD_Y = 2
+            self.IMG_PER_ROW = 15
 
-        IMG_size = 85
-        pad_x = 5
-        pad_y = 5
-        img_per_row = 10
+        if len(self.image_files) == self.MAX_IMAGES:
+            self.IMG_SIZE = 27
+            self.IMG_PAD_X = 1
+            self.IMG_PAD_Y = 1
+            self.IMG_PER_ROW = 30
+
+
+    # TODO: async loading and pagination
+    def load_images(self, folder_path):
+        pad_x = self.IMG_PAD_X
+        pad_y = self.IMG_PAD_Y
+
+        self._set_image_size()
+
+        img_per_row = self.IMG_PER_ROW
+        IMG_SIZE = self.IMG_SIZE
 
         loading_label = tk.Label(self.root, text="Загрузка...", background=colors['gray'], font=("Arial", 12))
         loading_label.place(x=self.GALLERY_WIDTH // 2 - 20, y=self.GALLERY_HEIGHT // 2 - 20)
@@ -578,10 +602,10 @@ class ImageLabelerApp:
 
         for idx, image_name in enumerate(self.image_files, start=len(self.nested_folders)):
             image = Image.open(image_name)
-            image = image.resize((IMG_size, IMG_size))
+            image = image.resize((IMG_SIZE, IMG_SIZE))
             photo = ImageTk.PhotoImage(image)
 
-            label = tk.Label(self.gallery_frame, image=photo)
+            label = tk.Label(self.gallery_frame, image=photo, width=IMG_SIZE, height=IMG_SIZE)
             label.image = photo
             base_image_name = os.path.relpath(image_name, self.initial_folder)
             image_bg_color = self.__get_image_bg_color(base_image_name)
@@ -595,20 +619,29 @@ class ImageLabelerApp:
 
 
     def load_nested_folders(self, folder_path):
+        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
+
         self.nested_folders = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
+        self.image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
+        self.image_files = self.image_files[:(min(len(self.image_files), self.MAX_IMAGES))]
+
         if folder_path != self.initial_folder:
             self.nested_folders = ['..'] + self.nested_folders
+        
+        self._set_image_size()
 
-        pad_x = 5
-        pad_y = 5
-        img_per_row = 10
+        pad_x = self.IMG_PAD_X
+        pad_y = self.IMG_PAD_Y
+        img_per_row = self.IMG_PER_ROW
+        IMG_SIZE = self.IMG_SIZE
 
         for idx, folder in enumerate(self.nested_folders):
             try:
                 image = Image.open(resource(self.ASSETS_FOLDER_BG))
             except Exception as e:
                 image = Image.open(self.ASSETS_FOLDER_BG)
-            photo = ImageTk.PhotoImage(image)
+            image = image.resize((IMG_SIZE, IMG_SIZE))
+            photo = ImageTk.PhotoImage(image) 
             folder_name = os.path.basename(folder)
 
             label = tk.Label(
@@ -618,7 +651,9 @@ class ImageLabelerApp:
                 compound=tk.CENTER, 
                 bg=colors["gray"], 
                 font=("Arial", 12, "bold"),
-                fg=colors["gray"]
+                fg=colors["gray"],
+                width=IMG_SIZE,
+                height=IMG_SIZE
             )
 
             label.image = photo
