@@ -8,7 +8,7 @@ from datetime import datetime
 
 class Scaler:
     def __init__(self, outDir = 'out/', name = ""):
-        self.resolution = (64, 64)
+        self.resolution = (64, 64, 1)
         self.outDir = os.path.join(outDir, 'output')
         self.outputPath = ""
         self.outputName = name
@@ -52,19 +52,22 @@ class Scaler:
         # print(f"Значения для {image_name} записаны в {self.outDir}")
 
     def process_image_csv(self, image_path: str):
-        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         
         if image is None:
             raise FileNotFoundError(f"Unable to load image: {image_path}.")
 
-        resized_image = cv2.resize(image, self.resolution)
+        resized_image = cv2.resize(image, (self.resolution[0], self.resolution[1]))
         normalized_image = around(resized_image / 255.0, decimals=3)
-        image_name = "".join(os.path.splitext(os.path.basename(image_path)))
+        image_name = os.path.join(
+            os.path.basename(os.path.dirname(image_path)),
+            os.path.basename(image_path)
+        )
 
         try:
             labelName = self.labelMap[image_name]
         except KeyError as e:
-            # print(f"Warning: File {e} not labeled.")
+            print(f"Warning: File {e} not labeled.")
             return
 
         flattened_values = normalized_image.flatten()
@@ -105,18 +108,22 @@ class Scaler:
         self.outputPath = csv_path
         if not os.path.isfile(csv_path):
             with open(csv_path, "w") as output_file:
-                width, height = self.resolution
-                header = "label," + ",".join(f"{i}" for i in range(1, width * height + 1))
+                width, height, channels = self.resolution
+                header = "label," + ",".join(f"{i}" for i in range(1, width * height * channels + 1))
                 output_file.write(header + '\n')
 
-        for file_name in os.listdir(input_folder):
-            if file_name.lower().endswith(supported_formats):
-                image_path = os.path.join(input_folder, file_name)
-                try:
-                    self.process_image_csv(image_path)
-                except Exception as e:
-                    # print(f"Error processing {file_name}: {str(e)}")
-                    pass
+        subfolders = [file for file in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, file))]
+
+        for subfolder in subfolders:
+            subfolder_path = os.path.join(input_folder, subfolder)
+            for file_name in os.listdir(subfolder_path):
+                if file_name.lower().endswith(supported_formats):
+                    image_path = os.path.join(subfolder_path, file_name)
+                    try:
+                        self.process_image_csv(image_path)
+                    except Exception as e:
+                        print(f"Error processing {file_name}: {str(e)}")
+                        pass
 
 
 class ImageScaler:
@@ -170,6 +177,13 @@ class ImageScaler:
         self.height_entry.insert(0, "64")
         self.height_entry.grid(row=1, column=2)
 
+        self.channels_label = Label(self.dimensions_frame, text="Каналы:", width=10)
+        self.channels_label.grid(row=2, column=0)
+
+        self.channels_entry = Entry(self.dimensions_frame, width=10)
+        self.channels_entry.insert(0, "1")
+        self.channels_entry.grid(row=3, column=0)
+
         self.dimensions_frame.pack(pady=10)
 
         self.process_button = Button(self.root, text="Экспорт", command=self.process_folder)
@@ -182,7 +196,7 @@ class ImageScaler:
             self.error_label.config(foreground="red")
             return
         
-        self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get())))
+        self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get()), int(self.channels_entry.get())))
 
         try:
             folder = os.path.join(self.folder, "images")
