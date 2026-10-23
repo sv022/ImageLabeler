@@ -15,7 +15,8 @@ from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
 from .utils.mnist_loader import load_mnist
 from .utils.styles import widget_styles
 from .utils.label_parser import LabelParser
-from.utils.resource import resource
+from .utils.label_exporter import LabelExporter
+from .utils.resource import resource
 
 
 class ImageLabelerApp:
@@ -215,6 +216,7 @@ class ImageLabelerApp:
         exportMenu = Menu(menubar)
         exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
         exportMenu.add_command(label="Экспорт папки в csv", underline=0, command=self.export_to_csv)
+        exportMenu.add_command(label="Экспорт разметки в txt", underline=0, command=self.export_labels_to_txt)
         menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
 
         premadeDatasetMenu = Menu(menubar)
@@ -755,7 +757,7 @@ class ImageLabelerApp:
         scaler_window = tk.Toplevel(self.root)
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        scaler_window.geometry(f"300x200+{x+200}+{y+200}")
+        scaler_window.geometry(f"300x250+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
 
         folder = self.folder if self.project is None else self.project["root"]
@@ -765,6 +767,18 @@ class ImageLabelerApp:
         scaler = ImageScaler(scaler_window, "csv", folder, labels, name)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
+    def export_labels_to_txt(self):
+        if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
+            return
+        folder = self.folder if self.project is None else self.project["root"]
+        labels = self.project["labels"] if self.project is not None else os.path.join(folder, "labels.json")
+        name = self.project["name"] if self.project is not None else os.path.basename(folder)
+
+        exporter = LabelExporter(folder, labels, self.project["images"] if self.project is not None else folder)
+        exporter.export_to_txt()
+
+        messagebox.showinfo("Информация", "Экспорт завершен")
     
     def plot_current_labels(self):
         if not self.project and not self.folder:
