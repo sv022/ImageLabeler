@@ -1,9 +1,15 @@
 import os
-from tkinter import Label, Button, filedialog, Frame, Entry
 import cv2
 import json
-from numpy import around
+import struct
+from tkinter import Label, Button, Frame, Entry
+from numpy import ascontiguousarray
 from datetime import datetime
+
+
+SUPPORTED_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
+BIN_MAGIC = b"IMGS"
+BIN_VERSION = 2 # CHW RGB
 
 
 class Scaler:
@@ -14,6 +20,7 @@ class Scaler:
         self.outputName = name
         self.labelMap = {}
         self.labels = []
+        os.makedirs(self.outDir, exist_ok=True)
 
         if not os.path.exists(self.outDir):
             os.makedirs(self.outDir)
@@ -21,113 +28,144 @@ class Scaler:
     
     def set_label_map(self, labelMap):
         self.labelMap = labelMap
-        self.labels = list(set([lable for lable in self.labelMap.values()]))
+        self.labels = sorted({str(v) for v in labelMap.values()})
 
     
     def set_resolution(self, resolution):
-        self.resolution = resolution
+        width, height, channels = resolution
+        if width <= 0 or height <= 0:
+            raise ValueError("Width and height must be positive.")
+        if channels not in (1, 3):
+            raise ValueError("Expected channels to be 1 or 3.")
+        self.resolution = (width, height, channels)
 
+    def _load_raw(self, image_path):
+        width, height, channels = self.resolution
+        flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR
+        image = cv2.imread(image_path, flag)
+        if image is None:
+            raise FileNotFoundError(f"Unable to load image: {image_path}.")
+        if channels == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.resize(image, (width, height))
+        if image.ndim == 2:
+            image = image[:, :, None]
+        return ascontiguousarray(image.transpose(2, 0, 1))
+
+    def _load_flat(self, image_path):
+        return self._load_raw(image_path).flatten()
+
+    def _write_bin_header(self, f):
+        w, h, c = self.resolution
+        f.write(BIN_MAGIC)
+        f.write(struct.pack("<BHHB", BIN_VERSION, w, h, c))
+        f.write(struct.pack("<H", len(self.labels)))
+        for label in self.labels:
+            data = label.encode("utf-8")
+            f.write(struct.pack("<H", len(data)))
+            f.write(data)
+        count_pos = f.tell()
+        f.write(struct.pack("<I", 0))  # число образцов, обновим в конце
+        return count_pos
+
+    def _find_label(self, image_path):
+        name = os.path.basename(image_path)
+        parent = os.path.basename(os.path.dirname(image_path))
+        for key in (f"{parent}/{name}", os.path.join(parent, name), name):
+            if key in self.labelMap:
+                return self.labelMap[key]
+        return None
+
+    def _new_path(self, ext):
+        now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
+        return os.path.join(self.outDir, f"{self.outputName}_{now}.{ext}")
+
+    @staticmethod
+    def _images_in(folder):
+        for f in sorted(os.listdir(folder)):
+            if f.lower().endswith(SUPPORTED_FORMATS):
+                yield os.path.join(folder, f)
     
-    def process_image_txt(self, image_path : str):
-        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        
-        if image is None:
-            raise FileNotFoundError(f"Unable to load image: {image_path}.")
+    def process_image_txt(self, image_path, output_file):
+        label = self._find_label(image_path)
+        if label is None:
+            print(f"Warning: {image_path} not labeled.")
+            return False
+        values = self._load_flat(image_path)
+        output_file.write(" ".join(map(str, values)) + '\n')
+        output_file.write(" ".join("1" if l == str(label) else "0" for l in self.labels) + '\n')
+        return True
 
-        resized_image = cv2.resize(image, self.resolution)
-        normalized_image = around(resized_image / 255.0, decimals=3)
-        image_name = "".join(os.path.splitext(os.path.basename(image_path)))
+    def process_image_csv(self, image_path, output_file):
+        label = self._find_label(image_path)
+        if label is None:
+            print(f"Warning: {image_path} not labeled.")
+            return False
+        values = self._load_flat(image_path)
+        output_file.write(f"{label}," + ",".join(map(str, values)) + '\n')
+        return True
 
-        try:
-            labelName = self.labelMap[image_name]
-        except KeyError as e:
-            # print(f"Warning: File {e} not labeled.")
-            return
+    def process_image_bin(self, image_path, f):
+        label = self._find_label(image_path)
+        if label is None:
+            print(f"Warning: {image_path} not labeled.")
+            return False
+        raw = self._load_raw(image_path)
+        f.write(struct.pack("<H", self.labels.index(str(label))))
+        f.write(raw.tobytes())
+        return True
 
-        with open(self.outputPath, "a") as output_file:
-            flattened_values = normalized_image.flatten()
-            output_file.write(" ".join(map(str, flattened_values)) + '\n')
-            output_file.write(" ".join(["1" if str(l) == str(labelName) else "0" for l in self.labels]) + '\n')
+    def process_folder_txt(self, input_folder):
+        if not os.path.isdir(input_folder) or not os.listdir(input_folder):
+            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
+        self.outputPath = self._new_path("txt")
+        with open(self.outputPath, "w", encoding="utf-8") as out:
+            for path in self._images_in(input_folder):
+                try:
+                    self.process_image_txt(path, out)
+                except Exception as e:
+                    print(f"Error processing {path}: {e}")
 
-        # print(f"Значения для {image_name} записаны в {self.outDir}")
-
-    def process_image_csv(self, image_path: str):
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        
-        if image is None:
-            raise FileNotFoundError(f"Unable to load image: {image_path}.")
-
-        resized_image = cv2.resize(image, (self.resolution[0], self.resolution[1]))
-        normalized_image = around(resized_image / 255.0, decimals=3)
-        image_name = os.path.join(
-            os.path.basename(os.path.dirname(image_path)),
-            os.path.basename(image_path)
-        )
-
-        try:
-            labelName = self.labelMap[image_name]
-        except KeyError as e:
-            print(f"Warning: File {e} not labeled.")
-            return
-
-        flattened_values = normalized_image.flatten()
-        csv_line = f"{labelName}," + ",".join(map(str, flattened_values))
-        
-        with open(self.outputPath, "a") as output_file:
-            output_file.write(csv_line + '\n')
-
-        # print(f"Значения для {image_name} записаны в {self.outDir}")
-
-
-    def process_folder_txt(self, input_folder : str):
-        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
-
-        if os.listdir(input_folder) == []:
-            return
-        
-        now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
-        txt_path = os.path.join(self.outDir, f"{self.outputName}_{now}.txt")
-        self.outputPath = txt_path
-        if not os.path.isfile(txt_path):
-            with open(txt_path, "w") as output_file:
-                output_file.write("")
-
-        for file_name in os.listdir(input_folder):
-            if file_name.lower().endswith(supported_formats):
-                image_path = os.path.join(input_folder, file_name)
-                self.process_image_txt(image_path)
-
-    def process_folder_csv(self, input_folder: str):
-        supported_formats = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
-
-        if not os.path.exists(input_folder) or not os.listdir(input_folder):
-            return
-        
-        now = datetime.today().strftime('%Y_%m_%d_%H%M%S')
-        csv_path = os.path.join(self.outDir, f"{self.outputName}_{now}.csv")
-        self.outputPath = csv_path
-        if not os.path.isfile(csv_path):
-            with open(csv_path, "w") as output_file:
-                width, height, channels = self.resolution
-                header = "label," + ",".join(f"{i}" for i in range(1, width * height * channels + 1))
-                output_file.write(header + '\n')
-
-        subfolders = [file for file in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, file))]
-
-        for subfolder in subfolders:
-            subfolder_path = os.path.join(input_folder, subfolder)
-            for file_name in os.listdir(subfolder_path):
-                if file_name.lower().endswith(supported_formats):
-                    image_path = os.path.join(subfolder_path, file_name)
+    def process_folder_csv(self, input_folder):
+        if not os.path.isdir(input_folder) or not os.listdir(input_folder):
+            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
+        w, h, c = self.resolution
+        self.outputPath = self._new_path("csv")
+        with open(self.outputPath, "w", encoding="utf-8") as out:
+            out.write("label," + ",".join(str(i) for i in range(1, w * h * c + 1)) + '\n')
+            for sub in sorted(os.listdir(input_folder)):
+                sub_path = os.path.join(input_folder, sub)
+                if not os.path.isdir(sub_path):
+                    continue
+                for path in self._images_in(sub_path):
                     try:
-                        self.process_image_csv(image_path)
+                        self.process_image_csv(path, out)
                     except Exception as e:
-                        print(f"Error processing {file_name}: {str(e)}")
-                        pass
+                        print(f"Error processing {path}: {e}")
+
+    def process_folder_bin(self, input_folder):
+        if not os.path.isdir(input_folder) or not os.listdir(input_folder):
+            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
+        self.outputPath = self._new_path("bin")
+        count = 0
+        with open(self.outputPath, "wb") as f:
+            count_pos = self._write_bin_header(f)
+            for sub in sorted(os.listdir(input_folder)):
+                sub_path = os.path.join(input_folder, sub)
+                if not os.path.isdir(sub_path):
+                    continue
+                for path in self._images_in(sub_path):
+                    try:
+                        if self.process_image_bin(path, f):
+                            count += 1
+                    except Exception as e:
+                        print(f"Error processing {path}: {e}")
+            f.seek(count_pos)
+            f.write(struct.pack("<I", count))
 
 
 class ImageScaler:
-    def __init__(self, root, exportFormat : str, folderPath = "", labelsPath = "", name = ""):
+    def __init__(self, root, exportFormat: str, folderPath="", labelsPath="", name=""):
         self.root = root
         self.name = name
         self.folder_label = Label(root)
@@ -139,77 +177,65 @@ class ImageScaler:
 
         self.folder = folderPath
         self.labels = labelsPath
-
-        if exportFormat not in {"txt", "csv"}:
-            self.export_format = "txt"
-        else:
-            self.export_format = exportFormat
-
+        self.export_format = exportFormat if exportFormat in {"txt", "csv", "bin"} else "txt"
         self.initUI()
 
+    def _set_status(self, text, color):
+        self.error_label.config(text=text, foreground=color)
 
     def initUI(self):
-        try:
-            with open(self.labels, 'r', encoding='utf-8') as file:
-                self.sc.set_label_map(json.load(file))
-        except Exception as e:
-            self.error_label.config(text=f"Выбранная папка не содержит файл labels.json")
-            self.error_label.config(foreground="red")
-            return
-        
-        self.error_label.config(text=f"Выбрана папка:\n{self.folder}")
-        self.error_label.config(foreground="green")
-
         self.dimensions_frame = Frame(self.root)
         self.dimensions_frame.pack(pady=10)
 
-        self.width_label = Label(self.dimensions_frame, text="Разрешение:")
-        self.width_label.grid(row=0, column=0)
-
+        Label(self.dimensions_frame, text="Разрешение:").grid(row=0, column=0)
         self.width_entry = Entry(self.dimensions_frame, width=10)
         self.width_entry.insert(0, "64")
         self.width_entry.grid(row=1, column=0)
-
-        self.height_label = Label(self.dimensions_frame, text="x")
-        self.height_label.grid(row=1, column=1)
-
+        Label(self.dimensions_frame, text="x").grid(row=1, column=1)
         self.height_entry = Entry(self.dimensions_frame, width=10)
         self.height_entry.insert(0, "64")
         self.height_entry.grid(row=1, column=2)
-
-        self.channels_label = Label(self.dimensions_frame, text="Каналы:", width=10)
-        self.channels_label.grid(row=2, column=0)
-
+        Label(self.dimensions_frame, text="Каналы (1 или 3):", width=16).grid(row=2, column=0)
         self.channels_entry = Entry(self.dimensions_frame, width=10)
         self.channels_entry.insert(0, "1")
         self.channels_entry.grid(row=3, column=0)
 
-        self.dimensions_frame.pack(pady=10)
-
         self.process_button = Button(self.root, text="Экспорт", command=self.process_folder)
         self.process_button.pack(pady=5)
 
+        try:
+            with open(self.labels, 'r', encoding='utf-8') as file:
+                self.sc.set_label_map(json.load(file))
+        except Exception as e:
+            self.process_button.config(state="disabled")
+            self._set_status(f"Не удалось загрузить файл меток:\n{self.labels}\n({e})", "red")
+            return
+
+        self._set_status(f"Выбрана папка:\n{self.folder}", "green")
+
 
     def process_folder(self):
-        if self.width_entry.get() == "" or self.height_entry.get() == "":
-            self.error_label.config(text="Укажите разрешение.")
-            self.error_label.config(foreground="red")
-            return
-        
-        self.sc.set_resolution((int(self.width_entry.get()), int(self.height_entry.get()), int(self.channels_entry.get())))
-
         try:
-            folder = os.path.join(self.folder, "images")
-            if self.export_format == "txt":
-                self.sc.process_folder_txt(folder)
-            elif self.export_format == "csv":
-                self.sc.process_folder_csv(folder)
-            else:
+            w, h = self.width_entry.get().strip(), self.height_entry.get().strip()
+            if not w or not h:
+                self._set_status("Укажите разрешение.", "red")
                 return
+            self.sc.set_resolution((int(w), int(h), int(self.channels_entry.get())))
+
+            folder = os.path.join(self.folder, "images")
+
+            handlers = {
+                "txt": self.sc.process_folder_txt,
+                "csv": self.sc.process_folder_csv,
+                "bin": self.sc.process_folder_bin,
+            }
+            handlers[self.export_format](folder)
+
+        except ValueError as e:
+            self._set_status(f"Некорректные параметры: {e}", "red")
+            return
         except Exception as e:
-            self.error_label.config(text=f"Произошла ошибка: {str(e)}")
-            self.error_label.config(foreground="red")
+            self._set_status(f"Произошла ошибка: {e}", "red")
             return
 
-        self.error_label.config(text=f"Папка успешно обработана.\nРезультаты сохранены в /{self.name}.{self.export_format}")
-        self.error_label.config(foreground="green")
+        self._set_status(f"Папка успешно обработана.\nРезультат: {self.sc.outputPath}", "green")

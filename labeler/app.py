@@ -11,7 +11,7 @@ from string import hexdigits
 from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
-from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv
+from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv, plot_from_bin
 from .utils.mnist_loader import load_mnist
 from .utils.styles import widget_styles
 from .utils.label_parser import LabelParser
@@ -216,6 +216,7 @@ class ImageLabelerApp:
         exportMenu = Menu(menubar)
         exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
         exportMenu.add_command(label="Экспорт папки в csv", underline=0, command=self.export_to_csv)
+        exportMenu.add_command(label="Экспорт папки в bin", underline=0, command=self.export_to_bin)
         exportMenu.add_command(label="Экспорт разметки в txt", underline=0, command=self.export_labels_to_txt)
         menubar.add_cascade(label="Экспорт", underline=0, menu=exportMenu)
 
@@ -228,6 +229,7 @@ class ImageLabelerApp:
         anasysisMenu.add_command(label="Текущая директория", underline=0, command=self.plot_current_labels)
         anasysisMenu.add_command(label="Выбрать файл txt", underline=0, command=self.plot_selected_txt)
         anasysisMenu.add_command(label="Выбрать файл csv", underline=0, command=self.plot_selected_csv)
+        anasysisMenu.add_command(label="Выбрать файл bin", underline=0, command=self.plot_selected_bin)
         menubar.add_cascade(label="Анализ", underline=0, menu=anasysisMenu)
 
 
@@ -730,42 +732,34 @@ class ImageLabelerApp:
             tk.messagebox.showerror("Ошибка", "Размер изображения слишком мал")
 
 
-    def export_to_txt(self):
+    def _open_scaler(self, fmt: str, height: int = 250):
         if not self.folder:
             messagebox.showwarning("Предупреждение", "Папка не выбрана")
             return
-        
+
         scaler_window = tk.Toplevel(self.root)
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        scaler_window.geometry(f"300x200+{x+200}+{y+200}")
+        scaler_window.geometry(f"300x{height}+{x+200}+{y+200}")
         scaler_window.resizable(False, False)
 
         folder = self.folder if self.project is None else self.project["root"]
-        labels = self.project["labels"] if self.project is not None else os.path.join(folder, "labels.json")
-        name = self.project["name"] if self.project is not None else os.path.basename(folder)
+        labels = (self.project["labels"] if self.project is not None
+                  else os.path.join(folder, "labels.json"))
+        name = (self.project["name"] if self.project is not None
+                else os.path.basename(folder))
 
-        scaler = ImageScaler(scaler_window, "txt", folder, labels, name)
+        ImageScaler(scaler_window, fmt, folder, labels, name)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
+    def export_to_txt(self):
+        self._open_scaler("txt", 200)
 
     def export_to_csv(self):
-        if not self.folder:
-            messagebox.showwarning("Предупреждение", "Папка не выбрана")
-            return
-        
-        scaler_window = tk.Toplevel(self.root)
-        x = self.root.winfo_x()
-        y = self.root.winfo_y()
-        scaler_window.geometry(f"300x250+{x+200}+{y+200}")
-        scaler_window.resizable(False, False)
+        self._open_scaler("csv", 250)
 
-        folder = self.folder if self.project is None else self.project["root"]
-        labels = self.project["labels"] if self.project is not None else os.path.join(folder, "labels.json")
-        name = self.project["name"] if self.project is not None else os.path.basename(folder)
-
-        scaler = ImageScaler(scaler_window, "csv", folder, labels, name)
-        scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
+    def export_to_bin(self):
+        self._open_scaler("bin", 250)
 
     def export_labels_to_txt(self):
         if not self.folder:
@@ -790,21 +784,27 @@ class ImageLabelerApp:
         plot_from_labels(os.path.join(self.folder, "labels.json"))
 
 
-    def plot_selected_txt(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+    def plot_selected(self, kind : str):
+        file_path = filedialog.askopenfilename(filetypes=[(f"{kind} files", f"*.{kind}")])
         if not file_path:
             return
+        if kind == "bin":
+            plot_from_bin(file_path)
+        elif kind == "csv":
+            plot_from_csv(file_path)
+        elif kind == "txt":
+            plot_from_file(file_path)
+        else:
+            messagebox.showwarning("Предупреждение", "Неподдерживаемый формат")
 
-        plot_from_file(file_path)
-
+    def plot_selected_txt(self):
+        self.plot_selected("txt")
 
     def plot_selected_csv(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if not file_path:
-            return
+        self.plot_selected("csv")
 
-        plot_from_csv(file_path)
-
+    def plot_selected_bin(self):
+        self.plot_selected("bin")
     
     def parse_mnist(self, kind : str):
         if not self.folder:
