@@ -3,14 +3,42 @@ import cv2
 import json
 import struct
 from tkinter import Label, Button, Frame, Entry
-from numpy import ascontiguousarray
+from numpy import ascontiguousarray, around
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
 
 SUPPORTED_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
+
+
+def _natural_key(s):
+    return (0, int(s), s) if s.lstrip("-").isdigit() else (1, 0, s)
+
+
 BIN_MAGIC = b"IMGS"
 BIN_VERSION = 2 # CHW RGB
 
+
+def _resize_like_loader(image, width, height):
+    sh, sw = image.shape[:2]
+    if sw != width:
+        image = cv2.resize(image, (width, sh), interpolation=cv2.INTER_AREA if sw > width else cv2.INTER_LINEAR)
+    if sh != height:
+        image = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA if sh > height else cv2.INTER_LINEAR)
+    return image
+
+
+def load_chw_uint8(image_path, width, height, channels):
+    flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR
+    image = cv2.imread(image_path, flag)
+    if image is None:
+        raise FileNotFoundError(f"Unable to load image: {image_path}.")
+    if channels == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = _resize_like_loader(image, width, height)
+    if image.ndim == 2:
+        image = image[:, :, None]
+    return ascontiguousarray(image.transpose(2, 0, 1))
 
 class Scaler:
     def __init__(self, outDir = 'out/', name = ""):
@@ -28,7 +56,7 @@ class Scaler:
     
     def set_label_map(self, labelMap):
         self.labelMap = labelMap
-        self.labels = sorted({str(v) for v in labelMap.values()})
+        self.labels = sorted({str(v) for v in labelMap.values()}, key=_natural_key)
 
     
     def set_resolution(self, resolution):
@@ -41,19 +69,10 @@ class Scaler:
 
     def _load_raw(self, image_path):
         width, height, channels = self.resolution
-        flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR
-        image = cv2.imread(image_path, flag)
-        if image is None:
-            raise FileNotFoundError(f"Unable to load image: {image_path}.")
-        if channels == 3:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, (width, height))
-        if image.ndim == 2:
-            image = image[:, :, None]
-        return ascontiguousarray(image.transpose(2, 0, 1))
+        return load_chw_uint8(image_path, width, height, channels)
 
     def _load_flat(self, image_path):
-        return self._load_raw(image_path).flatten()
+        return around(self._load_raw(image_path) / 255.0, decimals=3).flatten()
 
     def _write_bin_header(self, f):
         w, h, c = self.resolution
@@ -65,7 +84,7 @@ class Scaler:
             f.write(struct.pack("<H", len(data)))
             f.write(data)
         count_pos = f.tell()
-        f.write(struct.pack("<I", 0))  # число образцов, обновим в конце
+        f.write(struct.pack("<I", 0))
         return count_pos
 
     def _find_label(self, image_path):
@@ -102,7 +121,7 @@ class Scaler:
             print(f"Warning: {image_path} not labeled.")
             return False
         values = self._load_flat(image_path)
-        output_file.write(f"{label}," + ",".join(map(str, values)) + '\n')
+        output_file.write(f"{self.labels.index(str(label))}," + ",".join(map(str, values)) + '\n')
         return True
 
     def process_image_bin(self, image_path, f):
