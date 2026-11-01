@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from random import randint
 
 
 def load_bin(path):
@@ -89,7 +90,7 @@ def _plot_dataset(X, y, class_names, title="Анализ датасета", top_
     )
 
     if has_images:
-        example = X[0]
+        example = X[randint(0, n)]
         if c == 1:
             fig.add_trace(
                 go.Heatmap(z=example[0], colorscale="gray", zmin=0, zmax=255, showscale=False),
