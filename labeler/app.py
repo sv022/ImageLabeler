@@ -11,7 +11,7 @@ from string import hexdigits
 from .utils.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
-from .utils.data_analysis import plot_from_labels, plot_from_file, plot_from_csv, plot_from_bin
+from .utils.data_analysis import plot_from_labels, plot_from_csv, plot_from_bin
 from .utils.mnist_loader import load_mnist
 from .utils.styles import widget_styles
 from .utils.label_parser import LabelParser
@@ -736,25 +736,35 @@ class ImageLabelerApp:
             return
 
         scaler_window = tk.Toplevel(self.root)
+        scaler_window.title("Экспорт изображений")
+
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        scaler_window.geometry(f"300x{height}+{x+200}+{y+200}")
-        scaler_window.resizable(False, False)
+
+        scaler_window.geometry(f"+{x + 200}+{y + 200}")
+        scaler_window.resizable(True, True)
 
         folder = self.folder if self.project is None else self.project["root"]
-        labels = (self.project["labels"] if self.project is not None
-                  else os.path.join(folder, "labels.json"))
-        name = (self.project["name"] if self.project is not None
-                else os.path.basename(folder))
+        labels = (
+            self.project["labels"]
+            if self.project is not None
+            else os.path.join(folder, "labels.json")
+        )
+        name = (
+            self.project["name"]
+            if self.project is not None
+            else os.path.basename(folder)
+        )
 
         ImageScaler(scaler_window, fmt, folder, labels, name)
+
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
     def export_to_csv(self):
-        self._open_scaler("csv", 250)
+        self._open_scaler("csv")
 
     def export_to_bin(self):
-        self._open_scaler("bin", 250)
+        self._open_scaler("bin")
 
     def export_labels_to_txt(self):
         if not self.folder:

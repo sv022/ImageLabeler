@@ -2,10 +2,11 @@ import os
 import cv2
 import json
 import struct
-from tkinter import Label, Button, Frame, Entry
+from tkinter import Label, Button, Frame, Entry, ttk
 from numpy import ascontiguousarray, around
-from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
+from threading import Thread
+from queue import Queue, Empty
 
 
 SUPPORTED_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
@@ -105,6 +106,36 @@ class Scaler:
             if f.lower().endswith(SUPPORTED_FORMATS):
                 yield os.path.join(folder, f)
 
+    def _export_images(self, input_folder, output_file, processor):
+        stats = {
+            "found": 0,
+            "written": 0,
+            "unlabeled": 0,
+            "errors": 0,
+            "first_error": None,
+        }
+
+        for sub in sorted(os.listdir(input_folder)):
+            sub_path = os.path.join(input_folder, sub)
+            if not os.path.isdir(sub_path):
+                continue
+
+            for path in self._images_in(sub_path):
+                stats["found"] += 1
+
+                try:
+                    if processor(path, output_file):
+                        stats["written"] += 1
+                    else:
+                        stats["unlabeled"] += 1
+                except Exception as exc:
+                    stats["errors"] += 1
+                    if stats["first_error"] is None:
+                        stats["first_error"] = f"{path}: {exc}"
+                    print(f"Error processing {path}: {exc}")
+
+        return stats
+
     def process_image_csv(self, image_path, output_file):
         label = self._find_label(image_path)
         if label is None:
@@ -126,80 +157,167 @@ class Scaler:
 
     def process_folder_csv(self, input_folder):
         if not os.path.isdir(input_folder) or not os.listdir(input_folder):
-            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
+            raise FileNotFoundError(
+                f"Папка пуста или не найдена: {input_folder}"
+            )
+
         w, h, c = self.resolution
         self.outputPath = self._new_path("csv")
+
         with open(self.outputPath, "w", encoding="utf-8") as out:
-            out.write("label," + ",".join(str(i) for i in range(1, w * h * c + 1)) + '\n')
-            for sub in sorted(os.listdir(input_folder)):
-                sub_path = os.path.join(input_folder, sub)
-                if not os.path.isdir(sub_path):
-                    continue
-                for path in self._images_in(sub_path):
-                    try:
-                        self.process_image_csv(path, out)
-                    except Exception as e:
-                        print(f"Error processing {path}: {e}")
+            out.write(
+                "label,"
+                + ",".join(str(i) for i in range(1, w * h * c + 1))
+                + "\n"
+            )
+            stats = self._export_images(
+                input_folder, out, self.process_image_csv
+            )
+
+        return stats
+
 
     def process_folder_bin(self, input_folder):
         if not os.path.isdir(input_folder) or not os.listdir(input_folder):
-            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
+            raise FileNotFoundError(
+                f"Папка пуста или не найдена: {input_folder}"
+            )
+
         self.outputPath = self._new_path("bin")
-        count = 0
-        with open(self.outputPath, "wb") as f:
-            count_pos = self._write_bin_header(f)
-            for sub in sorted(os.listdir(input_folder)):
-                sub_path = os.path.join(input_folder, sub)
-                if not os.path.isdir(sub_path):
-                    continue
-                for path in self._images_in(sub_path):
-                    try:
-                        if self.process_image_bin(path, f):
-                            count += 1
-                    except Exception as e:
-                        print(f"Error processing {path}: {e}")
-            f.seek(count_pos)
-            f.write(struct.pack("<I", count))
+
+        with open(self.outputPath, "wb") as out:
+            count_pos = self._write_bin_header(out)
+            stats = self._export_images(
+                input_folder, out, self.process_image_bin
+            )
+            out.seek(count_pos)
+            out.write(struct.pack("<I", stats["written"]))
+
+        return stats
 
 
 class ImageScaler:
     def __init__(self, root, exportFormat: str, folderPath="", labelsPath="", name=""):
         self.root = root
         self.name = name
-        self.folder_label = Label(root)
-        self.folder_label.pack(pady=10)
-        self.error_label = Label(root, foreground="red")
-        self.error_label.pack(pady=5)
 
         self.sc = Scaler(outDir=folderPath, name=name)
 
         self.folder = folderPath
         self.labels = labelsPath
         self.export_format = exportFormat if exportFormat in {"csv", "bin"} else "csv"
+        self._export_queue = Queue()
+        self._export_running = False
         self.initUI()
+
+    def _set_export_controls(self, state):
+        for widget in (self.process_button, self.width_entry, self.height_entry,self.channels_entry): widget.config(state=state)
+
+
+    def _export_worker(self):
+        try:
+            folder = os.path.join(self.folder, "images")
+            handlers = {
+                "csv": self.sc.process_folder_csv,
+                "bin": self.sc.process_folder_bin,
+            }
+
+            stats = handlers[self.export_format](folder)
+            self._export_queue.put(("done", stats))
+        except Exception as exc:
+            self._export_queue.put(("error", str(exc)))
+
+
+    def _poll_export(self):
+        try:
+            event, payload = self._export_queue.get_nowait()
+        except Empty:
+            self.root.after(100, self._poll_export)
+            return
+
+        self._export_running = False
+        self._set_export_controls("normal")
+
+        if event == "error":
+            self._set_status(f"Ошибка экспорта: {payload}", "red")
+            return
+
+        stats = payload
+
+        summary = (
+            f"Найдено: {stats['found']}; "
+            f"записано: {stats['written']}; "
+            f"без меток: {stats['unlabeled']}; "
+            f"ошибок: {stats['errors']}."
+        )
+
+        if stats["written"] == 0:
+            title = "Экспорт завершён без записанных изображений."
+            color = "red"
+        elif stats["unlabeled"] or stats["errors"]:
+            title = "Экспорт завершён с пропусками или ошибками."
+            color = "darkorange"
+        else:
+            title = "Экспорт успешно завершён."
+            color = "green"
+
+        text = (
+            f"{title}\n{summary}\n"
+            f"Файл результата: {self.sc.outputPath}"
+        )
+
+        if stats["first_error"]:
+            text += f"\nПервая ошибка: {stats['first_error']}"
+
+        self._set_status(text, color)
 
     def _set_status(self, text, color):
         self.error_label.config(text=text, foreground=color)
 
     def initUI(self):
-        self.dimensions_frame = Frame(self.root)
-        self.dimensions_frame.pack(pady=10)
+        self.main_frame = ttk.Frame(self.root, padding=12)
+        self.main_frame.pack(side="top", fill="x", anchor="nw")
+        self.main_frame.columnconfigure(0, weight=1)
 
-        Label(self.dimensions_frame, text="Разрешение:").grid(row=0, column=0)
-        self.width_entry = Entry(self.dimensions_frame, width=10)
+        self.folder_label = ttk.Label(
+            self.main_frame,
+            text=f"Источник: {os.path.join(self.folder, 'images')}",
+            wraplength=480)
+        self.folder_label.grid(row=1, column=0, sticky="w")
+        ttk.Label(
+            self.main_frame, text=f"Результаты: {self.sc.outDir}",
+            wraplength=480).grid(row=2, column=0, sticky="w", pady=(4, 0))
+
+        self.dimensions_frame = ttk.LabelFrame(
+            self.main_frame, text="Параметры", padding=10)
+        self.dimensions_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+
+        ttk.Label(self.dimensions_frame, text="Размер:").grid(
+            row=0, column=0, sticky="w", padx=(0, 8))
+        self.width_entry = ttk.Entry(self.dimensions_frame, width=8)
         self.width_entry.insert(0, "64")
-        self.width_entry.grid(row=1, column=0)
-        Label(self.dimensions_frame, text="x").grid(row=1, column=1)
-        self.height_entry = Entry(self.dimensions_frame, width=10)
+        self.width_entry.grid(row=0, column=1)
+        ttk.Label(self.dimensions_frame, text="x").grid(
+            row=0, column=2, padx=6)
+        self.height_entry = ttk.Entry(self.dimensions_frame, width=8)
         self.height_entry.insert(0, "64")
-        self.height_entry.grid(row=1, column=2)
-        Label(self.dimensions_frame, text="Каналы (1 или 3):", width=16).grid(row=2, column=0)
-        self.channels_entry = Entry(self.dimensions_frame, width=10)
-        self.channels_entry.insert(0, "1")
-        self.channels_entry.grid(row=3, column=0)
+        self.height_entry.grid(row=0, column=3)
+        ttk.Label(self.dimensions_frame, text="пикселей").grid(
+            row=0, column=4, padx=(8, 0))
 
-        self.process_button = Button(self.root, text="Экспорт", command=self.process_folder)
-        self.process_button.pack(pady=5)
+        ttk.Label(self.dimensions_frame, text="Каналы:").grid(
+            row=1, column=0, sticky="w", padx=(0, 8), pady=(8, 0))
+        self.channels_entry = ttk.Entry(self.dimensions_frame, width=8)
+        self.channels_entry.insert(0, "1")
+        self.channels_entry.grid(row=1, column=1, pady=(8, 0))
+        ttk.Label(self.dimensions_frame, text="1 — grayscale, 3 — RGB").grid(row=1, column=2, columnspan=3, sticky="w", padx=(6, 0), pady=(8, 0))
+
+        ttk.Label(self.dimensions_frame, text=f"Формат: {self.export_format}").grid(row=2, column=0, columnspan=5, sticky="w", pady=(8, 0))
+
+        self.process_button = ttk.Button(self.main_frame, text="Экспортировать", command=self.process_folder)
+        self.process_button.grid(row=5, column=0, pady=(14, 8))
+        self.error_label = ttk.Label(self.main_frame, anchor="center", justify="center", wraplength=480)
+        self.error_label.grid(row=6, column=0, sticky="ew", pady=(0, 2))
 
         try:
             with open(self.labels, 'r', encoding='utf-8') as file:
@@ -209,30 +327,33 @@ class ImageScaler:
             self._set_status(f"Не удалось загрузить файл меток:\n{self.labels}\n({e})", "red")
             return
 
-        self._set_status(f"Выбрана папка:\n{self.folder}", "green")
+        self._set_status("Готов к экспорту.", "green")
 
 
     def process_folder(self):
+        if self._export_running:
+            return
+
         try:
-            w, h = self.width_entry.get().strip(), self.height_entry.get().strip()
+            w = self.width_entry.get().strip()
+            h = self.height_entry.get().strip()
+
             if not w or not h:
                 self._set_status("Укажите разрешение.", "red")
                 return
-            self.sc.set_resolution((int(w), int(h), int(self.channels_entry.get())))
 
-            folder = os.path.join(self.folder, "images")
-
-            handlers = {
-                "csv": self.sc.process_folder_csv,
-                "bin": self.sc.process_folder_bin,
-            }
-            handlers[self.export_format](folder)
-
-        except ValueError as e:
-            self._set_status(f"Некорректные параметры: {e}", "red")
-            return
-        except Exception as e:
-            self._set_status(f"Произошла ошибка: {e}", "red")
+            self.sc.set_resolution((
+                int(w),
+                int(h),
+                int(self.channels_entry.get()),
+            ))
+        except ValueError as exc:
+            self._set_status(f"Некорректные параметры: {exc}", "red")
             return
 
-        self._set_status(f"Папка успешно обработана.\nРезультат: {self.sc.outputPath}", "green")
+        self._export_running = True
+        self._set_export_controls("disabled")
+        self._set_status("Выполняется экспорт...", "blue")
+
+        Thread(target=self._export_worker, daemon=True).start()
+        self.root.after(100, self._poll_export)
