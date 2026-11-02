@@ -104,16 +104,6 @@ class Scaler:
         for f in sorted(os.listdir(folder)):
             if f.lower().endswith(SUPPORTED_FORMATS):
                 yield os.path.join(folder, f)
-    
-    def process_image_txt(self, image_path, output_file):
-        label = self._find_label(image_path)
-        if label is None:
-            print(f"Warning: {image_path} not labeled.")
-            return False
-        values = self._load_flat(image_path)
-        output_file.write(" ".join(map(str, values)) + '\n')
-        output_file.write(" ".join("1" if l == str(label) else "0" for l in self.labels) + '\n')
-        return True
 
     def process_image_csv(self, image_path, output_file):
         label = self._find_label(image_path)
@@ -133,17 +123,6 @@ class Scaler:
         f.write(struct.pack("<H", self.labels.index(str(label))))
         f.write(raw.tobytes())
         return True
-
-    def process_folder_txt(self, input_folder):
-        if not os.path.isdir(input_folder) or not os.listdir(input_folder):
-            raise FileNotFoundError(f"Папка пуста или не найдена: {input_folder}")
-        self.outputPath = self._new_path("txt")
-        with open(self.outputPath, "w", encoding="utf-8") as out:
-            for path in self._images_in(input_folder):
-                try:
-                    self.process_image_txt(path, out)
-                except Exception as e:
-                    print(f"Error processing {path}: {e}")
 
     def process_folder_csv(self, input_folder):
         if not os.path.isdir(input_folder) or not os.listdir(input_folder):
@@ -196,7 +175,7 @@ class ImageScaler:
 
         self.folder = folderPath
         self.labels = labelsPath
-        self.export_format = exportFormat if exportFormat in {"txt", "csv", "bin"} else "txt"
+        self.export_format = exportFormat if exportFormat in {"csv", "bin"} else "csv"
         self.initUI()
 
     def _set_status(self, text, color):
@@ -244,7 +223,6 @@ class ImageScaler:
             folder = os.path.join(self.folder, "images")
 
             handlers = {
-                "txt": self.sc.process_folder_txt,
                 "csv": self.sc.process_folder_csv,
                 "bin": self.sc.process_folder_bin,
             }

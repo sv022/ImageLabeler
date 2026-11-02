@@ -150,28 +150,6 @@ def plot_from_bin(bin_path: str):
     _plot_dataset(X, y, label_names)
 
 
-def plot_from_file(file_path: str, shape=None, class_names=None):
-    samples, ids = [], []
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = [ln.strip() for ln in f if ln.strip()]
-        if len(lines) % 2:
-            raise ValueError("Нечётное число строк: пропущена пара «данные + метка».")
-        for data_line, label_line in zip(lines[0::2], lines[1::2]):
-            ids.append(int(np.argmax(np.array(label_line.split(), dtype=np.float32))))
-            samples.append(np.array(data_line.split(), dtype=np.float32))
-        X = np.stack(samples)
-    except Exception as e:
-        print(f"Error loading TXT: {e}")
-        return
-
-    y = np.array(ids)
-    c, h, w = shape or _infer_chw(X.shape[1])
-    X = X.reshape(-1, c, h, w)
-    names = class_names or [str(i) for i in range(int(y.max()) + 1)]
-    _plot_dataset(X, y, names)
-
-
 def plot_from_csv(csv_path: str, shape=None):
     try:
         df = pd.read_csv(csv_path)

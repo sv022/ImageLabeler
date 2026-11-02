@@ -214,7 +214,6 @@ class ImageLabelerApp:
         menubar.add_cascade(label="Настройка классов", underline=0, menu=classMenu)
 
         exportMenu = Menu(menubar)
-        exportMenu.add_command(label="Экспорт папки в txt", underline=0, command=self.export_to_txt)
         exportMenu.add_command(label="Экспорт папки в csv", underline=0, command=self.export_to_csv)
         exportMenu.add_command(label="Экспорт папки в bin", underline=0, command=self.export_to_bin)
         exportMenu.add_command(label="Экспорт разметки в txt", underline=0, command=self.export_labels_to_txt)
@@ -227,7 +226,6 @@ class ImageLabelerApp:
 
         anasysisMenu = Menu(menubar)
         anasysisMenu.add_command(label="Текущая директория", underline=0, command=self.plot_current_labels)
-        anasysisMenu.add_command(label="Выбрать файл txt", underline=0, command=self.plot_selected_txt)
         anasysisMenu.add_command(label="Выбрать файл csv", underline=0, command=self.plot_selected_csv)
         anasysisMenu.add_command(label="Выбрать файл bin", underline=0, command=self.plot_selected_bin)
         menubar.add_cascade(label="Анализ", underline=0, menu=anasysisMenu)
@@ -752,9 +750,6 @@ class ImageLabelerApp:
         ImageScaler(scaler_window, fmt, folder, labels, name)
         scaler_window.protocol("WM_DELETE_WINDOW", scaler_window.destroy)
 
-    def export_to_txt(self):
-        self._open_scaler("txt", 200)
-
     def export_to_csv(self):
         self._open_scaler("csv", 250)
 
@@ -792,14 +787,9 @@ class ImageLabelerApp:
             plot_from_bin(file_path)
         elif kind == "csv":
             plot_from_csv(file_path)
-        elif kind == "txt":
-            plot_from_file(file_path)
         else:
             messagebox.showwarning("Предупреждение", "Неподдерживаемый формат")
-
-    def plot_selected_txt(self):
-        self.plot_selected("txt")
-
+        
     def plot_selected_csv(self):
         self.plot_selected("csv")
 
