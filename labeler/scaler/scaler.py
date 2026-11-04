@@ -8,6 +8,8 @@ from datetime import datetime
 from threading import Thread
 from queue import Queue, Empty
 
+from .augmenter import AugMixAugmenter
+
 
 SUPPORTED_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
 
@@ -138,8 +140,34 @@ class Scaler:
         width, height, channels = self.resolution
         return load_chw_uint8(image_path, width, height, channels)
 
+    def _write_raw(self, raw, label_index, output_file, binary):
+        if binary:
+            output_file.write(struct.pack("<H", label_index))
+            output_file.write(raw.tobytes())
+        else:
+            values = around(raw / 255.0, decimals=3).flatten()
+            output_file.write(f"{label_index}," + ",".join(map(str, values)) + "\n")
+
     def _load_flat(self, image_path):
         return around(self._load_raw(image_path) / 255.0, decimals=3).flatten()
+
+    def _iter_variants(self, raw, augmenter=None, extra_variants=0):
+        yield raw
+        if extra_variants == 0:
+            return
+        if raw.shape[0] == 1:
+            image = ascontiguousarray(raw[0])
+        else:
+            image = ascontiguousarray(raw.transpose(1, 2, 0))
+        for _ in range(extra_variants):
+            augmented = augmenter.apply(image)
+
+            if augmented.ndim == 2:
+                augmented = augmented[None, :, :]
+            else:
+                augmented = augmented.transpose(2, 0, 1)
+
+            yield ascontiguousarray(augmented)
 
     def _write_bin_header(self, f):
         w, h, c = self.resolution
@@ -188,7 +216,6 @@ class Scaler:
 
             for path in self._images_in(sub_path):
                 stats["found"] += 1
-
                 try:
                     if processor(path, output_file):
                         stats["written"] += 1
@@ -202,7 +229,11 @@ class Scaler:
 
         return stats
 
-    def _export_samples(self, samples, export_format, output_path=None):
+    def _export_samples(self, samples, export_format, output_path=None,*,augmenter=None, extra_variants=0):
+        if (isinstance(extra_variants, bool) or not isinstance(extra_variants, int) or extra_variants < 0):
+            raise ValueError("Количество дополнительных вариантов должно быть целым числом >= 0.")
+        if extra_variants > 0 and augmenter is None:
+            raise ValueError("Не задан генератор аугментации.")
         samples = list(samples)
         if not samples:
             raise ValueError("Список для экспорта пуст.")
@@ -222,15 +253,16 @@ class Scaler:
             with out:
                 if binary:
                     count_pos = self._write_bin_header(out)
-                    writer = self.process_image_bin
                 else:
                     w, h, c = self.resolution
                     out.write("label," + ",".join(str(i) for i in range(1, w * h * c + 1)) + "\n")
-                    writer = self.process_image_csv
                 for image_path, label in samples:
-                    if not writer(image_path, out):
-                        raise ValueError(f"Не удалось экспортировать: {image_path}")
-                    count += 1
+                    raw = self._load_raw(image_path)
+                    label_index = self.labels.index(str(label))
+                    for variant in self._iter_variants(raw, augmenter=augmenter, extra_variants=extra_variants):
+                        self._write_raw(variant, label_index, out, binary)
+                        count += 1
+
                 if binary:
                     out.seek(count_pos)
                     out.write(struct.pack("<I", count))
@@ -242,7 +274,7 @@ class Scaler:
             raise
 
         self.outputPath = path
-        return {"path": path, "written": count}
+        return {"path": path, "written": count, "originals": len(samples), "augmented": count - len(samples)}
 
     def process_image_csv(self, image_path, output_file):
         label = self._find_label(image_path)
@@ -263,11 +295,11 @@ class Scaler:
         f.write(raw.tobytes())
         return True
 
-    def export_samples_csv(self, samples, output_path=None):
-        return self._export_samples(samples, "csv", output_path)
+    def export_samples_csv(self, samples, output_path=None, *, augmenter=None, extra_variants=0):
+        return self._export_samples(samples, "csv", output_path,augmenter=augmenter, extra_variants=extra_variants)
 
-    def export_samples_bin(self, samples, output_path=None):
-        return self._export_samples(samples, "bin", output_path)
+    def export_samples_bin(self, samples, output_path=None, *, augmenter=None, extra_variants=0):
+        return self._export_samples(samples, "bin", output_path,augmenter=augmenter, extra_variants=extra_variants)
 
     def process_folder_csv(self, input_folder):
         samples, skipped = self.collect_samples(input_folder)
@@ -301,44 +333,82 @@ class ImageScaler:
         self.initUI()
 
     def _set_export_controls(self, state):
-        for widget in (self.process_button, self.width_entry, self.height_entry,
-                       self.channels_entry, self.split_check):
+        for widget in (self.process_button, self.width_entry, self.height_entry, self.channels_entry, self.split_check):
             widget.config(state=state)
         self._update_split_controls()
 
     def _update_split_controls(self):
-        state = "normal" if self.split_enabled.get() and not self._export_running else "disabled"
-        self.validation_entry.config(state=state)
-        self.seed_entry.config(state=state)
+        idle = not self._export_running
+        split_enabled = self.split_enabled.get()
 
-    def _export_worker(self, split_enabled, fraction, seed):
+        aug_enabled = (self.aug_enabled.get() if hasattr(self, "aug_enabled") else False)
+
+        self.validation_entry.config(state="normal" if idle and split_enabled else "disabled")
+
+        self.seed_entry.config(state=("normal" if idle and (split_enabled or aug_enabled) else "disabled"))
+
+        if hasattr(self, "aug_check"):
+            self._update_aug_controls()
+
+    def _update_aug_controls(self):
+        idle = not self._export_running
+        self.aug_check.config(state="normal" if idle else "disabled")
+        state = ("normal" if idle and self.aug_enabled.get() else "disabled")
+
+        self.aug_count_entry.config(state=state)
+        self.aug_severity_entry.config(state=state)
+
+        if hasattr(self, "aug_hint"):
+            if self.split_enabled.get():
+                text = "Применяется только к train"
+            else:
+                text = ("Применяется ко всей выборке")
+
+            self.aug_hint.config(text=text)
+
+    def _export_worker(self, split_enabled, fraction, seed, aug_options=None):
+        
         completed = []
         try:
             folder = os.path.join(self.folder, "images")
-            if not split_enabled:
-                handlers = {"csv": self.sc.process_folder_csv,
-                            "bin": self.sc.process_folder_bin}
-                result = handlers[self.export_format](folder)
-                completed.append(("Датасет", result))
-                skipped = result["skipped"]
-            else:
-                samples, skipped = self.sc.collect_samples(folder)
+            samples, skipped = self.sc.collect_samples(folder)
+
+            augmenter = None
+            extra_variants = 0
+
+            if aug_options is not None:
+                augmenter = AugMixAugmenter(severity=aug_options["severity"], mixture_width=3, chain_depth=-1, alpha=1.0, seed=seed)
+                extra_variants = aug_options["extra_variants"]
+
+            export = {
+                "csv": self.sc.export_samples_csv,
+                "bin": self.sc.export_samples_bin,
+            }[self.export_format]
+
+            if split_enabled:
                 train, validation = self.sc.split_samples(samples, fraction, seed)
                 base = os.path.splitext(self.sc._new_path(self.export_format))[0]
-                export = {"csv": self.sc.export_samples_csv,
-                          "bin": self.sc.export_samples_bin}[self.export_format]
-                for title, suffix, part in (("Train", "train", train),
-                                            ("Validation", "validation", validation)):
-                    path = f"{base}_{suffix}.{self.export_format}"
-                    completed.append((title, export(part, path)))
-            self._export_queue.put(("done", {
-                "results": completed, "skipped": skipped,
-                "split": split_enabled,
-            }))
+                jobs = [
+                    ("Train", train, f"{base}_train.{self.export_format}", True),
+                    ("Validation", validation, f"{base}_validation.{self.export_format}", False),
+                ]
+            else:
+                title = "Train"
+
+                jobs = [(title, samples, None, True)]
+
+            for title, part, path, allow_augmentation in jobs:
+                options = {}
+
+                if allow_augmentation and augmenter is not None:
+                    options = {"augmenter": augmenter, "extra_variants": extra_variants}
+                result = export(part, path, **options)
+                completed.append((title, result))
+
+            self._export_queue.put(( "done", {"results": completed, "skipped": skipped, "split": split_enabled}))
+
         except Exception as exc:
-            self._export_queue.put(("error", {
-                "message": str(exc), "results": completed,
-            }))
+            self._export_queue.put(("error", {"message": str(exc), "results": completed}))
 
     def _show_result_paths(self, results):
         for child in self.results_frame.winfo_children():
@@ -363,21 +433,35 @@ class ImageScaler:
         self._show_result_paths(payload["results"])
         if event == "error":
             text = f"Ошибка экспорта: {payload['message']}"
-            if payload["results"]:
-                text += "\nЧасть файлов уже создана и сохранена; пути указаны ниже."
             self._set_status(text, "red")
             return
 
         results, skipped = payload["results"], payload["skipped"]
-        summary = " · ".join(f"{title}: {result['written']}" for title, result in results)
+        parts = []
+        for title, result in results:
+            originals = result["originals"]
+            augmented = result["augmented"]
+            written = result["written"]
+            if augmented:
+                parts.append(f"[{title}] Всего: {written} | Исходных: {originals} | Аугментация: {augmented}")
+            else:
+                parts.append(f"{title}: {written} записей")
+        summary = "\n".join(parts)
         if payload["split"]:
-            total = sum(result["written"] for _, result in results)
-            actual = results[1][1]["written"] / total * 100
-            summary += f"\nФактическая доля validation: {actual:.1f}%"
-        text = f"Экспорт завершён.\n{summary}\nПропущено: {len(skipped)}"
+            total_originals = sum(result["originals"] for _, result in results)
+            validation_originals = results[1][1]["originals"]
+            actual = validation_originals / total_originals * 100
+
+            summary += (f"\nДоля validation по исходным изображениям: " f"{actual:.1f}%")
+        text = (
+            f"Экспорт завершён.\n"
+            f"{summary}\n"
+            f"Пропущено: {len(skipped)}"
+        )
         if skipped:
             path, reason = skipped[0]
             text += f"\nПервый пропуск: {path} — {reason}"
+        
         self._set_status(text, "darkorange" if skipped else "green")
 
     def _set_status(self, text, color):
@@ -425,7 +509,7 @@ class ImageScaler:
 
         self.split_enabled = BooleanVar(master=self.root, value=False)
         self.split_frame = ttk.LabelFrame(
-            self.main_frame, text="Разделение датасета", padding=10)
+            self.main_frame, text="Разделение и воспроизводимость", padding=10)
         self.split_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         self.split_check = ttk.Checkbutton(
             self.split_frame, text="Разделять на train / validation",
@@ -445,12 +529,34 @@ class ImageScaler:
         self.seed_entry.grid(row=2, column=1, pady=(8, 0))
         self._update_split_controls()
 
+        self.aug_enabled = BooleanVar(master=self.root, value=False)
+        self.aug_frame = ttk.LabelFrame(self.main_frame, text="Аугментация", padding=10)
+        self.aug_frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
+
+        self.aug_check = ttk.Checkbutton(self.aug_frame, text="Использовать AugMix", variable=self.aug_enabled, command=self._update_split_controls)
+        self.aug_check.grid(row=0, column=0, columnspan=2, sticky="w")
+
+        ttk.Label(self.aug_frame, text="Дополнительных вариантов:").grid(row=1, column=0, sticky="w",padx=(0, 8), pady=(8, 0))
+        self.aug_count_entry = ttk.Entry(self.aug_frame, width=8)
+        self.aug_count_entry.insert(0, "2")
+        self.aug_count_entry.grid(row=1, column=1, pady=(8, 0))
+
+        ttk.Label(self.aug_frame, text="Интенсивность (1–10):").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.aug_severity_entry = ttk.Entry(self.aug_frame, width=8)
+        self.aug_severity_entry.insert(0, "2")
+        self.aug_severity_entry.grid(row=2, column=1, pady=(8, 0))
+
+        self.aug_hint = Label(self.aug_frame, wraplength=360, justify="left", font=("Arial", 8, "italic"), fg="gray")
+        self.aug_hint.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        self._update_split_controls()
+
         self.process_button = ttk.Button(self.main_frame, text="Экспортировать", command=self.process_folder)
-        self.process_button.grid(row=5, column=0, pady=(14, 8))
+        self.process_button.grid(row=6, column=0, pady=(14, 8))
         self.error_label = ttk.Label(self.main_frame, anchor="center", justify="center", wraplength=480)
-        self.error_label.grid(row=6, column=0, sticky="ew", pady=(0, 2))
+        self.error_label.grid(row=7, column=0, sticky="ew", pady=(0, 2))
         self.results_frame = ttk.Frame(self.main_frame)
-        self.results_frame.grid(row=7, column=0, sticky="ew", pady=(6, 0))
+        self.results_frame.grid(row=8, column=0, sticky="ew", pady=(6, 0))
         self.results_frame.columnconfigure(1, weight=1)
 
 
@@ -468,27 +574,45 @@ class ImageScaler:
     def process_folder(self):
         if self._export_running:
             return
-
         try:
             w = self.width_entry.get().strip()
             h = self.height_entry.get().strip()
-
             if not w or not h:
                 self._set_status("Укажите разрешение.", "red")
                 return
 
-            self.sc.set_resolution((
-                int(w),
-                int(h),
-                int(self.channels_entry.get()),
-            ))
+            self.sc.set_resolution((int(w), int(h), int(self.channels_entry.get())))
+
             split_enabled = self.split_enabled.get()
-            fraction, seed = None, None
+            aug_enabled = self.aug_enabled.get()
+
+            fraction = None
+            seed = None
+            aug_options = None
+
             if split_enabled:
                 fraction = float(self.validation_entry.get().strip().replace(",", ".")) / 100
+
                 if not 0 < fraction < 1:
                     raise ValueError("Доля validation должна быть больше 0 и меньше 100%.")
+
+            if split_enabled or aug_enabled:
                 seed = int(self.seed_entry.get().strip())
+                if seed < 0:
+                    raise ValueError("Общий seed должен быть неотрицательным.")
+
+            if aug_enabled:
+                extra_variants = int(self.aug_count_entry.get().strip())
+                severity = int(self.aug_severity_entry.get().strip())
+
+                if extra_variants < 1:
+                    raise ValueError("Количество дополнительных вариантов должно быть >= 1.")
+
+                if not 1 <= severity <= 10:
+                    raise ValueError("Интенсивность AugMix должна быть от 1 до 10.")
+
+                aug_options = {"extra_variants": extra_variants, "severity": severity}
+
         except ValueError as exc:
             self._set_status(f"Некорректные параметры: {exc}", "red")
             return
@@ -496,11 +620,12 @@ class ImageScaler:
         self._export_running = True
         self._set_export_controls("disabled")
         self._set_status("Выполняется экспорт...", "blue")
-
         self._show_result_paths([])
+
         Thread(
             target=self._export_worker,
-            args=(split_enabled, fraction, seed),
+            args=(split_enabled, fraction, seed, aug_options),
             daemon=True,
         ).start()
+
         self.root.after(100, self._poll_export)
