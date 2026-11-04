@@ -32,7 +32,8 @@ class AugMixAugmenter:
     EXTRA_OPS = ("color", "contrast", "brightness", "sharpness")
 
     def __init__(self, severity=2, mixture_width=3, chain_depth=-1,
-                 alpha=1.0, seed=None, all_ops=False, operations=None):
+                 alpha=1.0, seed=None, all_ops=False, operations=None,
+                 pre_rotate=False, pre_hflip=False, pre_vflip=False):
         self._check_integer("severity", severity, 1, 10)
         self._check_integer("mixture_width", mixture_width, 1)
         if (isinstance(chain_depth, bool)
@@ -46,6 +47,12 @@ class AugMixAugmenter:
             self._check_integer("seed", seed, 0)
         if not isinstance(all_ops, bool):
             raise ValueError("all_ops must be bool")
+        for name, value in (("pre_rotate", pre_rotate), ("pre_hflip", pre_hflip), ("pre_vflip", pre_vflip)):
+            if not isinstance(value, bool):
+                raise ValueError(f"{name} must be bool")
+        self.pre_rotate = pre_rotate
+        self.pre_hflip = pre_hflip
+        self.pre_vflip = pre_vflip
         self.severity = int(severity)
         self.mixture_width = int(mixture_width)
         self.chain_depth = int(chain_depth)
@@ -89,7 +96,11 @@ class AugMixAugmenter:
         if image.shape[0] == 0 or image.shape[1] == 0:
             raise ValueError("Image dimensions must be positive")
 
-        original = Image.fromarray(image)
+        if self.pre_rotate and image.shape[0] != image.shape[1]:
+            raise ValueError("Pre-rotation requires a square image")
+
+        original = self._pre_transform(Image.fromarray(image))
+        image = np.asarray(original)
         weights = self.rng.dirichlet([self.alpha] * self.mixture_width).astype(np.float32)
         m = np.float32(self.rng.beta(self.alpha, self.alpha))
         mix = np.zeros(image.shape, dtype=np.float32)
@@ -103,6 +114,18 @@ class AugMixAugmenter:
             mix += weight * np.asarray(augmented, dtype=np.float32)
         result = (1.0 - m) * image.astype(np.float32) + m * mix
         return np.ascontiguousarray(np.clip(np.rint(result), 0, 255).astype(np.uint8))
+
+    def _pre_transform(self, image):
+        if self.pre_rotate:
+            turns = int(self.rng.integers(0, 4))
+            if turns:
+                method = (Image.Transpose.ROTATE_90, Image.Transpose.ROTATE_180, Image.Transpose.ROTATE_270)[turns - 1]
+                image = image.transpose(method)
+        if self.pre_hflip and self.rng.random() < 0.5:
+            image = ImageOps.mirror(image)
+        if self.pre_vflip and self.rng.random() < 0.5:
+            image = ImageOps.flip(image)
+        return image
 
     def _level(self, maximum, integer=False):
         value = self.rng.uniform(0.1, self.severity) * maximum / 10.0

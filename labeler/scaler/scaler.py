@@ -359,6 +359,8 @@ class ImageScaler:
         self.aug_count_entry.config(state=state)
         self.aug_severity_entry.config(state=state)
         self.aug_operations_button.config(state=state)
+        for widget in (self.pre_rotate_check, self.pre_hflip_check, self.pre_vflip_check):
+            widget.config(state=state)
 
         if hasattr(self, "aug_hint"):
             if self.split_enabled.get():
@@ -456,7 +458,7 @@ class ImageScaler:
             extra_variants = 0
 
             if aug_options is not None:
-                augmenter = AugMixAugmenter(severity=aug_options["severity"], mixture_width=3, chain_depth=-1, alpha=1.0, seed=seed, operations=aug_options["operations"])
+                augmenter = AugMixAugmenter(severity=aug_options["severity"], mixture_width=3, chain_depth=-1, alpha=1.0, seed=seed, operations=aug_options["operations"], pre_rotate=aug_options["pre_rotate"], pre_hflip=aug_options["pre_hflip"], pre_vflip=aug_options["pre_vflip"])
                 extra_variants = aug_options["extra_variants"]
 
             export = {
@@ -630,8 +632,18 @@ class ImageScaler:
         self.aug_operations_label = ttk.Label(self.aug_frame, text=f"Выбрано: {len(self.aug_operations)}")
         self.aug_operations_label.grid(row=3, column=1, sticky="w", pady=(8, 0))
 
+        self.pre_rotate = BooleanVar(master=self.root, value=False)
+        self.pre_hflip = BooleanVar(master=self.root, value=False)
+        self.pre_vflip = BooleanVar(master=self.root, value=False)
+        self.pre_rotate_check = ttk.Checkbutton(self.aug_frame, text="Предповорот с шагом 90° (квадрат)", variable=self.pre_rotate)
+        self.pre_rotate_check.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.pre_hflip_check = ttk.Checkbutton(self.aug_frame, text="Предварительное отражение по горизонтали", variable=self.pre_hflip)
+        self.pre_hflip_check.grid(row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.pre_vflip_check = ttk.Checkbutton(self.aug_frame, text="Предварительное отражение по вертикали", variable=self.pre_vflip)
+        self.pre_vflip_check.grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
         self.aug_hint = Label(self.aug_frame, wraplength=360, justify="left", font=("Arial", 8, "italic"), fg="gray")
-        self.aug_hint.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.aug_hint.grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self._update_split_controls()
 
@@ -696,7 +708,11 @@ class ImageScaler:
                     raise ValueError("Интенсивность AugMix должна быть от 1 до 10.")
 
                 operations = AugMixAugmenter.validate_operations(self.aug_operations)
-                aug_options = {"extra_variants": extra_variants, "severity": severity, "operations": operations}
+                pre_rotate = self.pre_rotate.get()
+                if pre_rotate and self.sc.resolution[0] != self.sc.resolution[1]:
+                    raise ValueError("Для предварительного поворота ширина и высота должны совпадать.")
+                aug_options = {"extra_variants": extra_variants, "severity": severity, "operations": operations,
+                               "pre_rotate": pre_rotate, "pre_hflip": self.pre_hflip.get(), "pre_vflip": self.pre_vflip.get()}
 
         except ValueError as exc:
             self._set_status(f"Некорректные параметры: {exc}", "red")
