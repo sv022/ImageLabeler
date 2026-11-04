@@ -8,7 +8,7 @@ from PIL import Image, ImageTk
 from random import choice
 from string import hexdigits
 
-from .utils.scaler import ImageScaler
+from .scaler.scaler import ImageScaler
 from .utils.cropper import ImageCropper
 from .utils.colors import colors, random_colors
 from .utils.data_analysis import plot_from_labels, plot_from_csv, plot_from_bin
@@ -900,20 +900,22 @@ class ImageLabelerApp:
         parser = LabelParser(parser_window)
         parser.parse_filenames(self.folder, labels_path, config_path)
 
-        # parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)             
+        parser_window.protocol("WM_DELETE_WINDOW", self.__restart_programm)             
 
 
     def create_labels_from_folders(self):
-            if not self.folder:
-                messagebox.showwarning("Предупреждение", "Папка не выбрана")
-                return
+        if not self.folder:
+            messagebox.showwarning("Предупреждение", "Папка не выбрана")
+            return
 
-            if self.project is not None:
-                labels_path = self.project["labels"]
-                config_path = self.project["config"]
-            else:
-                labels_path = os.path.join(self.folder, "labels.json")
-                config_path = os.path.join(self.folder, "config.json")
-            
-            parser = LabelParser(None)
-            parser.parse_folders(self.folder, labels_path, config_path)
+        if self.project is not None:
+            labels_path = self.project["labels"]
+            config_path = self.project["config"]
+        else:
+            labels_path = os.path.join(self.folder, "labels.json")
+            config_path = os.path.join(self.folder, "config.json")
+        
+        parser = LabelParser(None)
+        parser.parse_folders(self.folder, labels_path, config_path)
+
+        self.__restart_programm()

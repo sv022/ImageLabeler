@@ -95,7 +95,7 @@ class LabelParser:
         self.save(self.labels_path, self.config_path)
 
         self.folder_label.config(text=f"Папка обработана\n{len(self.files) + sum(len(v) for v in self.nested_files.values())} изображений")
-        messagebox.showinfo("Успех", "Папка обработана. Перезапустите программу чтобы увидеть изменения.")
+        messagebox.showinfo("Успех", "Папка обработана. Программа перезапустится для применения изменений.")
 
     
     def save(self, labels: str, config : str):
@@ -135,5 +135,5 @@ class LabelParser:
 
         self.save(labels, config)
         
-        messagebox.showinfo("Успех", "Папка обработана. Перезапустите программу чтобы увидеть изменения.")
+        messagebox.showinfo("Успех", "Папка обработана. Программа перезапустится для применения изменений.")
         
