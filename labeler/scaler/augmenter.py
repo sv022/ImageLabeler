@@ -32,7 +32,7 @@ class AugMixAugmenter:
     EXTRA_OPS = ("color", "contrast", "brightness", "sharpness")
 
     def __init__(self, severity=2, mixture_width=3, chain_depth=-1,
-                 alpha=1.0, seed=None, all_ops=False):
+                 alpha=1.0, seed=None, all_ops=False, operations=None):
         self._check_integer("severity", severity, 1, 10)
         self._check_integer("mixture_width", mixture_width, 1)
         if (isinstance(chain_depth, bool)
@@ -52,6 +52,24 @@ class AugMixAugmenter:
         self.alpha = float(alpha)
         self.rng = np.random.default_rng(seed)
         self._ops = self.BASE_OPS + (self.EXTRA_OPS if all_ops else ())
+        if operations is not None:
+            self._ops = self.validate_operations(operations)
+
+    @classmethod
+    def validate_operations(cls, operations):
+        if not isinstance(operations, (list, tuple)):
+            raise ValueError("operations must be a list or tuple")
+        if not operations:
+            raise ValueError("Select at least one operation")
+        available = cls.BASE_OPS + cls.EXTRA_OPS
+        selected = []
+        for name in operations:
+            if not isinstance(name, str) or name not in available:
+                raise ValueError(f"Unknown operation: {name!r}")
+            if name in selected:
+                raise ValueError(f"Duplicate operation: {name}")
+            selected.append(name)
+        return tuple(selected)
 
     @staticmethod
     def _check_integer(name, value, minimum, maximum=None):

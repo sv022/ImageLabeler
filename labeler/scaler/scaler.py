@@ -2,7 +2,7 @@ import os
 import cv2
 import json
 import struct
-from tkinter import Label, Button, Frame, Entry, ttk, BooleanVar
+from tkinter import Label, Button, Frame, Entry, ttk, BooleanVar, Toplevel
 from numpy import ascontiguousarray, around
 from datetime import datetime
 from threading import Thread
@@ -330,6 +330,7 @@ class ImageScaler:
         self.export_format = exportFormat if exportFormat in {"csv", "bin"} else "csv"
         self._export_queue = Queue()
         self._export_running = False
+        self.aug_operations = AugMixAugmenter.BASE_OPS
         self.initUI()
 
     def _set_export_controls(self, state):
@@ -357,6 +358,7 @@ class ImageScaler:
 
         self.aug_count_entry.config(state=state)
         self.aug_severity_entry.config(state=state)
+        self.aug_operations_button.config(state=state)
 
         if hasattr(self, "aug_hint"):
             if self.split_enabled.get():
@@ -365,6 +367,83 @@ class ImageScaler:
                 text = ("Применяется ко всей выборке")
 
             self.aug_hint.config(text=text)
+
+    def _select_aug_operations(self):
+        if self._export_running:
+            return
+
+        window = Toplevel(self.root)
+        window.title("Операции AugMix")
+        window.transient(self.root)
+        window.resizable(False, False)
+
+        window.withdraw()
+        window.update_idletasks()
+        self.root.update_idletasks()
+        root_width = self.root.winfo_width()
+        root_height = self.root.winfo_height()
+        root_x = self.root.winfo_x()
+        root_y = self.root.winfo_y()
+        win_width = window.winfo_reqwidth()
+        win_height = window.winfo_reqheight()
+        x = root_x + (root_width // 2) - (win_width // 2)
+        y = root_y + (root_height // 2) - (win_height // 2)
+        window.geometry(f"+{x}+{y}")
+        window.deiconify()
+        
+        frame = ttk.Frame(window, padding=12)
+        frame.pack(fill="both", expand=True)
+
+        groups = (
+            ("Геометрические", (
+                ("rotate", "Поворот"),
+                ("shear_x", "Скашивание по X"),
+                ("shear_y", "Скашивание по Y"),
+                ("translate_x", "Перемещение по X"),
+                ("translate_y", "Перемещение по Y"),
+            )),
+            ("Тональные и цветовые", (
+                ("autocontrast", "Автоконтраст"),
+                ("equalize", "Выравнивание гистограммы"),
+                ("posterize", "Постеризация"),
+                ("solarize", "Соляризация"),
+                ("color", "Цветность"),
+                ("contrast", "Контраст"),
+                ("brightness", "Яркость"),
+                ("sharpness", "Резкость"),
+            )),
+        )
+        variables = {}
+        for column, (title, operations) in enumerate(groups):
+            group = ttk.LabelFrame(frame, text=title, padding=8)
+            group.grid(row=0, column=column, sticky="ns", padx=(0, 8) if column == 0 else 0)
+            for row, (name, text) in enumerate(operations):
+                variable = BooleanVar(master=window, value=name in self.aug_operations)
+                variables[name] = variable
+                ttk.Checkbutton(group, text=text, variable=variable).grid(row=row, column=0, sticky="w", pady=2)
+
+        error_label = ttk.Label(frame, foreground="red")
+        error_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        def apply():
+            names = AugMixAugmenter.BASE_OPS + AugMixAugmenter.EXTRA_OPS
+            selected = tuple(name for name in names if variables[name].get())
+            if not selected:
+                error_label.config(text="Выберите хотя бы одну операцию.")
+                return
+            self.aug_operations = AugMixAugmenter.validate_operations(selected)
+            self.aug_operations_label.config(text=f"Выбрано: {len(self.aug_operations)}")
+            window.destroy()
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=2, column=0, columnspan=2, pady=(10, 0))
+        ttk.Button(buttons, text="Применить", command=apply).pack(side="left", padx=(0, 8))
+        ttk.Button(buttons, text="Отмена", command=window.destroy).pack(side="left")
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
+        window.bind("<Escape>", lambda event: window.destroy())
+        window.wait_visibility()
+        window.grab_set()
+        window.focus_set()
 
     def _export_worker(self, split_enabled, fraction, seed, aug_options=None):
         
@@ -377,7 +456,7 @@ class ImageScaler:
             extra_variants = 0
 
             if aug_options is not None:
-                augmenter = AugMixAugmenter(severity=aug_options["severity"], mixture_width=3, chain_depth=-1, alpha=1.0, seed=seed)
+                augmenter = AugMixAugmenter(severity=aug_options["severity"], mixture_width=3, chain_depth=-1, alpha=1.0, seed=seed, operations=aug_options["operations"])
                 extra_variants = aug_options["extra_variants"]
 
             export = {
@@ -546,8 +625,13 @@ class ImageScaler:
         self.aug_severity_entry.insert(0, "2")
         self.aug_severity_entry.grid(row=2, column=1, pady=(8, 0))
 
+        self.aug_operations_button = ttk.Button(self.aug_frame, text="Операции...", command=self._select_aug_operations)
+        self.aug_operations_button.grid(row=3, column=0, sticky="w", pady=(8, 0))
+        self.aug_operations_label = ttk.Label(self.aug_frame, text=f"Выбрано: {len(self.aug_operations)}")
+        self.aug_operations_label.grid(row=3, column=1, sticky="w", pady=(8, 0))
+
         self.aug_hint = Label(self.aug_frame, wraplength=360, justify="left", font=("Arial", 8, "italic"), fg="gray")
-        self.aug_hint.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.aug_hint.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self._update_split_controls()
 
@@ -611,7 +695,8 @@ class ImageScaler:
                 if not 1 <= severity <= 10:
                     raise ValueError("Интенсивность AugMix должна быть от 1 до 10.")
 
-                aug_options = {"extra_variants": extra_variants, "severity": severity}
+                operations = AugMixAugmenter.validate_operations(self.aug_operations)
+                aug_options = {"extra_variants": extra_variants, "severity": severity, "operations": operations}
 
         except ValueError as exc:
             self._set_status(f"Некорректные параметры: {exc}", "red")
